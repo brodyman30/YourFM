@@ -462,34 +462,46 @@ async def get_tracks(request: dict):
         import traceback
         logging.error(traceback.format_exc())
     
-    logging.info(f"Got {len(discovery_tracks)} tracks from related artists. New artists discovered: {len(discovery_artist_names)}")
+    logging.info(f"Got {len(discovery_tracks)} discovery tracks. New artists discovered: {len(discovery_artist_names)}")
     
-    # STEP 3: Get additional discovery from Spotify recommendations
-    logging.info("STEP 3: Fetching recommendations...")
+    # STEP 3: Additional search-based discovery (recommendations API deprecated Nov 2024)
+    logging.info("STEP 3: Additional discovery via playlist search...")
     try:
-        if shuffled_artist_ids:
-            # Multiple recommendation calls with randomized seeds
-            for _ in range(3):
-                random.shuffle(shuffled_artist_ids)
-                seed_artists = shuffled_artist_ids[:5]
+        # Search for playlists in the genres
+        for genre in genres[:2]:
+            try:
+                playlist_query = f"{genre} mix"
+                playlist_results = sp.search(q=playlist_query, type='playlist', limit=5, market='US')
                 
-                # Add some randomness to recommendation parameters
-                recommendations = sp.recommendations(
-                    seed_artists=seed_artists,
-                    limit=50,
-                    country='US',
-                    min_popularity=random.randint(20, 40),  # Vary popularity threshold
-                    target_energy=random.uniform(0.4, 0.8)  # Vary energy
-                )
+                for playlist in playlist_results['playlists']['items'][:3]:
+                    if playlist and playlist.get('id'):
+                        try:
+                            # Get tracks from this playlist
+                            playlist_tracks = sp.playlist_tracks(playlist['id'], limit=30, market='US')
+                            
+                            for item in playlist_tracks['items']:
+                                if item and item.get('track'):
+                                    track = item['track']
+                                    if track and not is_selected_artist(track):
+                                        add_track(track, discovery_tracks, is_discovery=True)
+                                    
+                                    if len(discovery_tracks) >= 200:
+                                        break
+                            
+                            if len(discovery_tracks) >= 200:
+                                break
+                        except Exception:
+                            continue
                 
-                for track in recommendations['tracks']:
-                    # Only add if NOT from selected artists
-                    if not is_selected_artist(track):
-                        add_track(track, discovery_tracks, is_discovery=True)
+                if len(discovery_tracks) >= 200:
+                    break
+            except Exception as e:
+                logging.error(f"Playlist search error: {str(e)}")
+                continue
     except Exception as e:
-        logging.error(f"Error fetching recommendations: {str(e)}")
+        logging.error(f"Error in playlist discovery: {str(e)}")
     
-    logging.info(f"After recommendations: {len(discovery_tracks)} discovery tracks total")
+    logging.info(f"After all discovery: {len(discovery_tracks)} discovery tracks total")
     
     # STEP 4: Build final playlist with 80/20 split
     # Target 50 tracks: 40 discovery (80%) + 10 selected artists (20%)
