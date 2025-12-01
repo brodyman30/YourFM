@@ -486,7 +486,6 @@ const Player = ({ station, spotifyToken }) => {
               key={station._id}
               token={spotifyToken}
               uris={tracks.map(t => t.uri)}
-              offset={currentTrackIndex}
               play={isPlaying}
               initialVolume={100}
               getPlayer={(player) => {
