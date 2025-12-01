@@ -921,6 +921,18 @@ async def generate_bumper(request: BumperRequest):
         
         # Fetch real-time data based on topics
         real_time_context = ""
+        weather_context = ""
+        
+        # Check for weather topic - fetch real weather data
+        if request.topics and any('weather' in t.lower() for t in request.topics):
+            location = request.user_location or "auto:ip"
+            weather = await get_weather(location)
+            if weather and weather.get('city'):
+                temp = round(weather.get('temp_f', 0))
+                condition = weather.get('condition', '')
+                city = weather.get('city', '')
+                weather_context = f"REAL WEATHER: It's currently {temp}°F and {condition.lower()} in {city}. "
+                logging.info(f"Weather for bumper: {weather_context}")
         
         # Check for concert tours topic - fetch real concert data
         if request.topics and any('concert' in t.lower() or 'tour' in t.lower() for t in request.topics):
