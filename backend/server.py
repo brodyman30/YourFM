@@ -42,6 +42,9 @@ EMERGENT_LLM_KEY = os.getenv('EMERGENT_LLM_KEY')
 # Bandsintown API (for concert data)
 BANDSINTOWN_APP_ID = os.getenv('BANDSINTOWN_APP_ID', 'yourfm_radio_app')
 
+# WeatherAPI (for weather data)
+WEATHER_API_KEY = os.getenv('WEATHER_API_KEY', '')
+
 # Create the main app without a prefix
 app = FastAPI()
 
@@ -58,6 +61,47 @@ def prepare_for_mongo(data: dict) -> dict:
         else:
             result[key] = value
     return result
+
+# Helper function to fetch weather data
+async def get_weather(location: str = "auto:ip") -> dict:
+    """Fetch current weather from WeatherAPI.com
+    location can be: city name, zip, IP address, or 'auto:ip' for auto-detect"""
+    if not WEATHER_API_KEY:
+        return {}
+    
+    try:
+        url = "http://api.weatherapi.com/v1/current.json"
+        params = {
+            "key": WEATHER_API_KEY,
+            "q": location,
+            "aqi": "no"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    location_data = data.get('location', {})
+                    current = data.get('current', {})
+                    condition = current.get('condition', {})
+                    
+                    return {
+                        "city": location_data.get('name', ''),
+                        "region": location_data.get('region', ''),
+                        "country": location_data.get('country', ''),
+                        "temp_f": current.get('temp_f', 0),
+                        "temp_c": current.get('temp_c', 0),
+                        "condition": condition.get('text', ''),
+                        "humidity": current.get('humidity', 0),
+                        "wind_mph": current.get('wind_mph', 0),
+                        "feelslike_f": current.get('feelslike_f', 0)
+                    }
+                else:
+                    logging.error(f"Weather API error: {response.status}")
+                    return {}
+    except Exception as e:
+        logging.error(f"Error fetching weather: {str(e)}")
+        return {}
 
 # Helper function to fetch concert data from Bandsintown
 async def get_artist_concerts(artist_name: str, limit: int = 3) -> List[dict]:
