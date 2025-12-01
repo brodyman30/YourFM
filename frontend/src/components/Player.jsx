@@ -10,7 +10,7 @@ const API = `${BACKEND_URL}/api`;
 const Player = ({ station, spotifyToken }) => {
   const [tracks, setTracks] = useState([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [currentBumper, setCurrentBumper] = useState(null);
   const [playingBumper, setPlayingBumper] = useState(false);
   const [loading, setLoading] = useState(true);
