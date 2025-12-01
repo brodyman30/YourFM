@@ -516,10 +516,12 @@ const Player = ({ station, spotifyToken }) => {
         <div style={{ marginTop: '2rem', visibility: playingBumper ? 'hidden' : 'visible' }} data-testid="spotify-player-container">
           {spotifyToken && tracks.length > 0 && currentTrack && (
             <SpotifyPlayer
+              key={station._id}
               token={spotifyToken}
               uris={tracks.map(t => t.uri)}
               offset={currentTrackIndex}
               play={isPlaying}
+              initialVolume={100}
               getPlayer={(player) => {
                 if (player && !spotifyPlayer) {
                   console.log('✓ Spotify player instance captured');
