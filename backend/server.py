@@ -798,6 +798,13 @@ async def delete_station(station_id: str):
     
     return {"message": "Station deleted successfully"}
 
+# Concert Data Routes (Bandsintown)
+@api_router.get("/concerts/{artist_name}")
+async def get_concerts(artist_name: str):
+    """Get upcoming concerts for an artist"""
+    concerts = await get_artist_concerts(artist_name)
+    return {"artist": artist_name, "concerts": concerts}
+
 # ElevenLabs Voice Routes
 @api_router.get("/elevenlabs/voices")
 async def get_voices():
