@@ -313,12 +313,12 @@ async def get_tracks(request: dict):
     all_tracks = []
     seed_artist_ids = []
     
-    # Get tracks from selected artists (get ALL top tracks)
+    # Get only 2-3 tracks from selected artists (just seeds, not the main focus)
     for artist_id in artist_ids[:10]:  # Support up to 10 artists
         try:
             results = sp.artist_top_tracks(artist_id, country='US')
             seed_artist_ids.append(artist_id)
-            for track in results['tracks'][:10]:  # Get top 10 per artist instead of 3
+            for track in results['tracks'][:2]:  # Only 2 tracks per selected artist
                 all_tracks.append({
                     "uri": track['uri'],
                     "name": track['name'],
