@@ -238,58 +238,38 @@ const Player = ({ station, spotifyToken }) => {
 
     const barCount = 80;
     const barHeights = new Array(barCount).fill(0);
-    let time = 0;
 
-    // Visualizer animation
+    // Visualizer animation - ONLY reacts to real audio data
     const animate = () => {
       // Clear canvas completely for sharp bars
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const barWidth = (canvas.width / barCount) - 2;
 
-      // Use Spotify audio features if available
-      const tempo = audioFeatures?.tempo || 120; // BPM
-      const energy = audioFeatures?.energy || 0.5; // 0-1
-      const danceability = audioFeatures?.danceability || 0.5; // 0-1
-      
-      // Calculate beat interval in seconds
-      const beatInterval = 60 / tempo;
-      
-      if (isPlayingRef.current) {
-        time += 1/60; // Assuming 60fps
-        
-        // Track beat phase (0 to 1 over one beat)
-        beatPhaseRef.current = (time % beatInterval) / beatInterval;
-        
-        // Create beat pulse (0-1, peaks at each beat)
-        const beatPulse = Math.sin(beatPhaseRef.current * Math.PI * 2) * 0.5 + 0.5;
-        const beatStrength = Math.pow(beatPulse, 2); // Smoother pulse
-      
+      // Get frequency data from Web Audio API
+      let hasAudioData = false;
+      if (analyserRef.current && dataArrayRef.current && isPlayingRef.current) {
+        try {
+          analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+          // Check if we actually have audio data (not all zeros)
+          hasAudioData = dataArrayRef.current.some(val => val > 10);
+        } catch (e) {
+          hasAudioData = false;
+        }
+      }
+
+      if (hasAudioData) {
+        // ONLY animate when we have real audio data
         for (let i = 0; i < barCount; i++) {
-          // Create frequency-like distribution across bars (NO WAVES)
-          const freqPos = i / barCount;
+          // Map each bar to a frequency bin
+          const dataIndex = Math.floor((i / barCount) * dataArrayRef.current.length);
+          const audioValue = dataArrayRef.current[dataIndex] / 255;
           
-          let barIntensity = 0;
+          // Set target height directly from audio data
+          const targetHeight = audioValue * canvas.height * 0.8 + canvas.height * 0.05;
           
-          // Bass frequencies (left side) - bounce on beats
-          if (freqPos < 0.3) {
-            barIntensity = (1 - freqPos / 0.3) * energy * beatStrength * 0.8;
-          }
-          // Mid frequencies (center) - moderate bounce
-          else if (freqPos >= 0.3 && freqPos <= 0.7) {
-            const midPos = (freqPos - 0.3) / 0.4;
-            barIntensity = Math.sin(midPos * Math.PI) * danceability * beatStrength * 0.6;
-          }
-          // Treble frequencies (right side) - light bounce
-          else {
-            barIntensity = ((freqPos - 0.7) / 0.3) * energy * beatStrength * 0.5;
-          }
-          
-          // Set target height based on beat
-          const targetHeight = barIntensity * canvas.height * 0.75 + canvas.height * 0.1;
-          
-          // Smooth transition
-          const smoothing = 0.3;
+          // Quick smoothing for responsive feel
+          const smoothing = 0.4;
           barHeights[i] += (targetHeight - barHeights[i]) * smoothing;
 
           const barHeight = barHeights[i];
@@ -298,13 +278,11 @@ const Player = ({ station, spotifyToken }) => {
 
           // Create gradient from bottom to top
           const gradient = ctx.createLinearGradient(x, canvas.height, x, y);
-          gradient.addColorStop(0, '#8B5CF6'); // Purple at bottom
-          gradient.addColorStop(0.5, '#A78BFA'); // Light purple middle
-          gradient.addColorStop(1, '#FBBF24'); // Yellow at top
+          gradient.addColorStop(0, '#8B5CF6');
+          gradient.addColorStop(0.5, '#A78BFA');
+          gradient.addColorStop(1, '#FBBF24');
 
           ctx.fillStyle = gradient;
-
-          // Draw simple rectangular bars
           ctx.fillRect(x, y, barWidth, barHeight);
 
           // Add glow to taller bars
@@ -316,17 +294,16 @@ const Player = ({ station, spotifyToken }) => {
           }
         }
       } else {
-        // Paused state - minimal bars
+        // NO audio data - draw static bars at minimum height
         for (let i = 0; i < barCount; i++) {
-          const targetHeight = canvas.height * 0.1;
-          barHeights[i] += (targetHeight - barHeights[i]) * 0.1;
+          const targetHeight = canvas.height * 0.05;
+          barHeights[i] = targetHeight; // Set immediately, no animation
           
-          const barHeight = barHeights[i];
           const x = i * (barWidth + 2);
-          const y = canvas.height - barHeight;
+          const y = canvas.height - targetHeight;
           
           ctx.fillStyle = '#8B5CF6';
-          ctx.fillRect(x, y, barWidth, barHeight);
+          ctx.fillRect(x, y, barWidth, targetHeight);
         }
       }
 
