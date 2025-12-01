@@ -59,6 +59,45 @@ def prepare_for_mongo(data: dict) -> dict:
             result[key] = value
     return result
 
+# Helper function to fetch concert data from Bandsintown
+async def get_artist_concerts(artist_name: str, limit: int = 3) -> List[dict]:
+    """Fetch upcoming concerts for an artist from Bandsintown API"""
+    try:
+        # URL encode the artist name
+        import urllib.parse
+        encoded_name = urllib.parse.quote(artist_name)
+        
+        url = f"https://rest.bandsintown.com/artists/{encoded_name}/events"
+        params = {
+            "app_id": BANDSINTOWN_APP_ID,
+            "date": "upcoming"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                if response.status == 200:
+                    events = await response.json()
+                    
+                    if isinstance(events, list) and len(events) > 0:
+                        concerts = []
+                        for event in events[:limit]:
+                            venue = event.get('venue', {})
+                            concerts.append({
+                                "date": event.get('datetime', ''),
+                                "venue": venue.get('name', 'Unknown Venue'),
+                                "city": venue.get('city', ''),
+                                "region": venue.get('region', ''),
+                                "country": venue.get('country', ''),
+                                "url": event.get('url', '')
+                            })
+                        return concerts
+                    
+                logging.info(f"No concerts found for {artist_name}")
+                return []
+    except Exception as e:
+        logging.error(f"Error fetching concerts for {artist_name}: {str(e)}")
+        return []
+
 # Models
 class Artist(BaseModel):
     id: str
