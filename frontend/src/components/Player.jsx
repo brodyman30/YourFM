@@ -233,14 +233,18 @@ const Player = ({ station, spotifyToken }) => {
       console.log(`✅ Loaded ${response.data.tracks.length} tracks for station`);
       setTracks(response.data.tracks);
       setCurrentTrackIndex(0); // Reset to first track
+      setPlayerReady(false); // Reset player state
       
       // Don't fetch audio features here - will be fetched when track actually plays
       
-      // Delay play to prevent double-start
-      setTimeout(() => {
-        console.log('▶️ Starting playback');
-        setIsPlaying(true);
-      }, 500);
+      // Wait for player to be ready before playing
+      const checkPlayerReady = setInterval(() => {
+        if (playerReady) {
+          clearInterval(checkPlayerReady);
+          console.log('▶️ Player ready, starting playback');
+          setTimeout(() => setIsPlaying(true), 300);
+        }
+      }, 100);
     } catch (error) {
       console.error('Error loading tracks:', error);
       toast.error('Failed to load tracks');
