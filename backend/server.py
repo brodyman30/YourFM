@@ -383,35 +383,47 @@ async def get_tracks(request: dict):
     logging.info("STEP 2: Fetching tracks from related artists...")
     try:
         for artist_id in shuffled_artist_ids[:10]:
+            logging.info(f"Getting related artists for: {artist_id}")
             related = sp.artist_related_artists(artist_id)
             related_artists = related['artists']
+            logging.info(f"Found {len(related_artists)} related artists")
             random.shuffle(related_artists)  # Randomize related artists
             
             for related_artist in related_artists[:15]:
                 # Skip if this is one of the selected artists (by ID or name)
                 if related_artist['id'] in artist_ids:
+                    logging.info(f"Skipping {related_artist['name']} - is selected artist (by ID)")
                     continue
                 if related_artist['name'].lower() in artist_names:
+                    logging.info(f"Skipping {related_artist['name']} - is selected artist (by name)")
                     continue
+                
+                logging.info(f"Fetching tracks from related artist: {related_artist['name']}")
                     
                 try:
                     related_tracks = sp.artist_top_tracks(related_artist['id'], country='US')
                     tracks = related_tracks['tracks']
+                    logging.info(f"Got {len(tracks)} tracks from {related_artist['name']}")
                     random.shuffle(tracks)  # Randomize tracks
                     for track in tracks[:6]:  # Random 6 tracks from each related artist
                         # Double-check it's not from a selected artist
                         if not is_selected_artist(track):
                             add_track(track, discovery_tracks, is_discovery=True)
+                        else:
+                            logging.info(f"Skipping track {track['name']} - from selected artist")
                         if len(discovery_tracks) >= 200:
                             break
                     if len(discovery_tracks) >= 200:
                         break
-                except Exception:
+                except Exception as inner_e:
+                    logging.error(f"Error getting tracks for related artist {related_artist['name']}: {str(inner_e)}")
                     continue
             if len(discovery_tracks) >= 200:
                 break
     except Exception as e:
         logging.error(f"Error fetching related artists: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
     
     logging.info(f"Got {len(discovery_tracks)} tracks from related artists. New artists discovered: {len(discovery_artist_names)}")
     
