@@ -123,11 +123,25 @@ const Player = ({ station, spotifyToken }) => {
 
   const initAudioVisualizer = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('❌ Canvas not available');
+      return;
+    }
 
+    console.log('✅ Canvas found, initializing visualizer');
     const ctx = canvas.getContext('2d');
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    
+    // Set canvas size based on parent
+    const updateCanvasSize = () => {
+      const parent = canvas.parentElement;
+      if (parent) {
+        canvas.width = parent.offsetWidth;
+        canvas.height = parent.offsetHeight;
+        console.log(`📏 Canvas size: ${canvas.width}x${canvas.height}`);
+      }
+    };
+    
+    updateCanvasSize();
 
     let time = 0;
     const barCount = 80;
@@ -149,7 +163,7 @@ const Player = ({ station, spotifyToken }) => {
         const wave3 = Math.sin(time * 0.7 + i * 0.2) * 0.5 + 0.5;
         
         // Combine waves for organic movement
-        const targetHeight = isPlaying
+        const targetHeight = isPlayingRef.current
           ? ((wave1 + wave2 + wave3) / 3) * canvas.height * 0.7
           : canvas.height * 0.05;
 
@@ -201,6 +215,7 @@ const Player = ({ station, spotifyToken }) => {
       animationRef.current = requestAnimationFrame(animate);
     };
 
+    console.log('🎬 Starting animation');
     animate();
   };
 
