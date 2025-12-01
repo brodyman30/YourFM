@@ -541,15 +541,27 @@ const Player = ({ station, spotifyToken }) => {
                 // Update playing state - CRITICAL for visualizer
                 const playing = !state.paused;
                 
-                // Log every callback with track info to debug double-play
+                // Detect if track is restarting (double-play bug)
                 const trackName = state.track_window?.current_track?.name || 'Unknown';
-                console.log('🎵 CALLBACK:', {
-                  track: trackName,
-                  playing: playing,
-                  position: state.position?.toFixed(2),
-                  paused: state.paused,
-                  timestamp: Date.now()
-                });
+                const currentUri = state.track_window?.current_track?.uri;
+                const currentPosition = state.position || 0;
+                
+                // Check for restart: same track, position went back to 0 after playing
+                if (currentUri === lastTrackUriRef.current && 
+                    currentPosition < 0.5 && 
+                    lastPositionRef.current > 2 &&
+                    (Date.now() - trackStartTimeRef.current) < 5000) {
+                  console.warn('⚠️ DETECTED RESTART - Preventing double-play');
+                  return; // Don't update state, let it continue from current position
+                }
+                
+                // Track if this is a new track starting
+                if (currentPosition < 0.5 && currentUri !== lastTrackUriRef.current) {
+                  trackStartTimeRef.current = Date.now();
+                  console.log('▶️ NEW TRACK:', trackName);
+                }
+                
+                lastPositionRef.current = currentPosition;
                 
                 setIsPlaying(playing);
                 isPlayingRef.current = playing; // Update ref for visualizer
