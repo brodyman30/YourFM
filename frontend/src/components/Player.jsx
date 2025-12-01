@@ -562,10 +562,11 @@ const Player = ({ station, spotifyToken }) => {
                   return;
                 }
                 
-                console.log('Spotify callback - playing:', !state.paused, 'position:', state.position, 'duration:', state.duration);
+                // Update playing state - CRITICAL for visualizer
                 const playing = !state.paused;
+                console.log('Spotify callback - playing:', playing, 'position:', state.position, 'duration:', state.duration);
                 setIsPlaying(playing);
-                isPlayingRef.current = playing;
+                isPlayingRef.current = playing; // Update ref for visualizer
                 
                 // ALWAYS update current track display and album art when available
                 if (state.track_window?.current_track) {
