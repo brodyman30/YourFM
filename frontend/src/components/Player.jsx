@@ -121,32 +121,73 @@ const Player = ({ station, spotifyToken }) => {
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
 
-    // Simple visualizer animation
+    let time = 0;
+    const barCount = 80;
+    const barHeights = new Array(barCount).fill(0);
+
+    // Simple visualizer animation with curved bars
     const animate = () => {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      // Clear with fade effect
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const barCount = 64;
       const barWidth = canvas.width / barCount;
+      time += 0.05;
 
       for (let i = 0; i < barCount; i++) {
-        // Generate random heights for demo (would use actual audio data with Web Audio API)
-        const barHeight = isPlaying
-          ? Math.random() * canvas.height * 0.8
-          : canvas.height * 0.1;
+        // Create wave-like motion with sine waves
+        const wave1 = Math.sin(time + i * 0.15) * 0.5 + 0.5;
+        const wave2 = Math.sin(time * 1.3 - i * 0.1) * 0.5 + 0.5;
+        const wave3 = Math.sin(time * 0.7 + i * 0.2) * 0.5 + 0.5;
+        
+        // Combine waves for organic movement
+        const targetHeight = isPlaying
+          ? ((wave1 + wave2 + wave3) / 3) * canvas.height * 0.7
+          : canvas.height * 0.05;
 
-        // Create gradient
-        const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
-        gradient.addColorStop(0, '#8B5CF6');
-        gradient.addColorStop(1, '#FBBF24');
+        // Smooth transition
+        barHeights[i] += (targetHeight - barHeights[i]) * 0.15;
+
+        const barHeight = barHeights[i];
+        const x = i * barWidth;
+        const y = canvas.height - barHeight;
+
+        // Create gradient based on position (purple to yellow)
+        const gradient = ctx.createLinearGradient(0, canvas.height, 0, y);
+        
+        // Alternate colors for more dynamic look
+        if (i % 2 === 0) {
+          gradient.addColorStop(0, '#8B5CF6'); // Purple
+          gradient.addColorStop(1, '#FBBF24'); // Yellow
+        } else {
+          gradient.addColorStop(0, '#A78BFA'); // Light purple
+          gradient.addColorStop(1, '#FCD34D'); // Light yellow
+        }
 
         ctx.fillStyle = gradient;
-        ctx.fillRect(
-          i * barWidth,
-          canvas.height - barHeight,
-          barWidth - 2,
-          barHeight
+
+        // Draw curved bars using quadratic curves
+        ctx.beginPath();
+        const topCurve = Math.sin(time * 2 + i * 0.3) * 10;
+        ctx.moveTo(x, canvas.height);
+        ctx.lineTo(x, y + 10);
+        ctx.quadraticCurveTo(
+          x + barWidth / 2,
+          y + topCurve,
+          x + barWidth - 2,
+          y + 10
         );
+        ctx.lineTo(x + barWidth - 2, canvas.height);
+        ctx.closePath();
+        ctx.fill();
+
+        // Add glow effect on top
+        if (barHeight > canvas.height * 0.3) {
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = i % 2 === 0 ? '#FBBF24' : '#8B5CF6';
+        } else {
+          ctx.shadowBlur = 0;
+        }
       }
 
       animationRef.current = requestAnimationFrame(animate);
