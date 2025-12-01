@@ -25,6 +25,7 @@ const Player = ({ station, spotifyToken }) => {
   const animationRef = useRef(null);
   const bumperAudioRef = useRef(null);
   const lastTrackUriRef = useRef(null);
+  const isPlayingRef = useRef(true);
 
   useEffect(() => {
     if (station) {
