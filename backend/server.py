@@ -345,39 +345,47 @@ async def get_tracks(request: dict):
                     country='US'
                 )
             
-            for track in recommendations['tracks']:
-                # Avoid duplicates
-                if not any(t['uri'] == track['uri'] for t in all_tracks):
-                    all_tracks.append({
-                        "uri": track['uri'],
-                        "name": track['name'],
-                        "artist": track['artists'][0]['name'],
-                        "album": track['album']['name'],
-                        "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
-                        "duration_ms": track['duration_ms'],
-                        "preview_url": track.get('preview_url')
-                    })
+                for track in recommendations['tracks']:
+                    # Avoid duplicates
+                    if not any(t['uri'] == track['uri'] for t in all_tracks):
+                        all_tracks.append({
+                            "uri": track['uri'],
+                            "name": track['name'],
+                            "artist": track['artists'][0]['name'],
+                            "album": track['album']['name'],
+                            "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
+                            "duration_ms": track['duration_ms'],
+                            "preview_url": track.get('preview_url')
+                        })
     except Exception as e:
         logging.error(f"Error fetching recommendations: {str(e)}")
-        # If recommendations fail, get related artists' tracks
-        try:
-            for artist_id in seed_artist_ids[:2]:
-                related = sp.artist_related_artists(artist_id)
-                for related_artist in related['artists'][:3]:  # Top 3 related artists
-                    related_tracks = sp.artist_top_tracks(related_artist['id'], country='US')
-                    for track in related_tracks['tracks'][:2]:
-                        if not any(t['uri'] == track['uri'] for t in all_tracks):
-                            all_tracks.append({
-                                "uri": track['uri'],
-                                "name": track['name'],
-                                "artist": track['artists'][0]['name'],
-                                "album": track['album']['name'],
-                                "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
-                                "duration_ms": track['duration_ms'],
-                                "preview_url": track.get('preview_url')
-                            })
-        except Exception as related_error:
-            logging.error(f"Error fetching related artists: {str(related_error)}")
+    
+    # Get tracks from related artists for even more variety
+    try:
+        for artist_id in seed_artist_ids[:5]:  # Check related artists
+            related = sp.artist_related_artists(artist_id)
+            for related_artist in related['artists'][:10]:  # Top 10 related artists
+                related_tracks = sp.artist_top_tracks(related_artist['id'], country='US')
+                for track in related_tracks['tracks'][:5]:  # 5 tracks from each related artist
+                    if not any(t['uri'] == track['uri'] for t in all_tracks):
+                        all_tracks.append({
+                            "uri": track['uri'],
+                            "name": track['name'],
+                            "artist": track['artists'][0]['name'],
+                            "album": track['album']['name'],
+                            "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
+                            "duration_ms": track['duration_ms'],
+                            "preview_url": track.get('preview_url')
+                        })
+                        # Stop if we have enough tracks
+                        if len(all_tracks) >= 300:
+                            break
+                if len(all_tracks) >= 300:
+                    break
+            if len(all_tracks) >= 300:
+                break
+    except Exception as related_error:
+        logging.error(f"Error fetching related artists: {str(related_error)}")
     
     # Shuffle tracks for variety
     import random
