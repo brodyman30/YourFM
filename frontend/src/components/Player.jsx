@@ -94,11 +94,7 @@ const Player = ({ station, spotifyToken }) => {
             console.log('⚠️ No album art URL available');
           }
           
-          // Fetch audio features for visualizer
-          const trackId = track.uri.split(':')[2];
-          const trackName = track.name;
-          const artistName = track.artists?.[0]?.name || '';
-          fetchAudioFeatures(trackId, trackName, artistName);
+          // Track changed - no API calls needed
           
           // Update track index
           const newIndex = tracks.findIndex(t => t.uri === track.uri);
