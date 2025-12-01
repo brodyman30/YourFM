@@ -503,38 +503,12 @@ const Player = ({ station, spotifyToken }) => {
               }}
               callback={(state) => {
                 if (!state) {
-                  console.log('Spotify state is null');
                   return;
                 }
                 
-                // Update playing state - CRITICAL for visualizer
                 const playing = !state.paused;
-                
-                // Detect if track is restarting (double-play bug)
-                const trackName = state.track_window?.current_track?.name;
-                const currentUri = state.track_window?.current_track?.uri;
-                const currentPosition = state.position || 0;
-                
-                // RESTART DETECTION: Same track URI, position reset to 0 after playing beyond 2 seconds
-                if (currentUri && 
-                    currentUri === lastTrackUriRef.current && 
-                    currentPosition < 1 && 
-                    lastPositionRef.current > 2) {
-                  console.warn('⚠️⚠️⚠️ RESTART DETECTED - Same track resetting! Blocking.');
-                  return; // Block the restart
-                }
-                
-                // NEW TRACK DETECTION: Different URI (natural track change)
-                if (currentUri && currentUri !== lastTrackUriRef.current && trackName) {
-                  console.log('✅ New track starting:', trackName);
-                  lastTrackUriRef.current = currentUri;
-                  trackStartTimeRef.current = Date.now();
-                }
-                
-                lastPositionRef.current = currentPosition;
-                
                 setIsPlaying(playing);
-                isPlayingRef.current = playing; // Update ref for visualizer
+                isPlayingRef.current = playing;
                 
                 // ALWAYS update current track display and album art when available
                 if (state.track_window?.current_track) {
