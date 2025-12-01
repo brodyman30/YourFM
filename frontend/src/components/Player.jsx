@@ -201,134 +201,70 @@ const Player = ({ station, spotifyToken }) => {
     const barCount = 80;
     const barHeights = new Array(barCount).fill(0);
     let time = 0;
-    let bassIntensity = 0;
-    let midIntensity = 0;
-    let trebleIntensity = 0;
 
     // Visualizer animation
     const animate = () => {
-      // Clear with fade effect
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Clear canvas completely for sharp bars
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const barWidth = canvas.width / barCount;
+      const barWidth = (canvas.width / barCount) - 2;
 
-      // Get frequency data and analyze bands
+      // Get frequency data
       let hasAudioData = false;
       if (analyserRef.current && dataArrayRef.current && isPlayingRef.current) {
         try {
           analyserRef.current.getByteFrequencyData(dataArrayRef.current);
           hasAudioData = dataArrayRef.current.some(val => val > 0);
-          
-          if (hasAudioData) {
-            // Analyze frequency bands (bass, mid, treble)
-            const third = Math.floor(dataArrayRef.current.length / 3);
-            
-            // Bass (low frequencies)
-            let bassSum = 0;
-            for (let i = 0; i < third; i++) {
-              bassSum += dataArrayRef.current[i];
-            }
-            bassIntensity = (bassSum / third) / 255;
-            
-            // Mid frequencies
-            let midSum = 0;
-            for (let i = third; i < third * 2; i++) {
-              midSum += dataArrayRef.current[i];
-            }
-            midIntensity = (midSum / third) / 255;
-            
-            // Treble (high frequencies)
-            let trebleSum = 0;
-            for (let i = third * 2; i < dataArrayRef.current.length; i++) {
-              trebleSum += dataArrayRef.current[i];
-            }
-            trebleIntensity = (trebleSum / (dataArrayRef.current.length - third * 2)) / 255;
-          }
         } catch (e) {
           hasAudioData = false;
         }
       }
 
-      // Time speed controlled by mid frequencies (makes wave speed react to music)
-      const timeSpeed = hasAudioData ? 0.02 + (midIntensity * 0.08) : 0.03;
-      time += timeSpeed;
-
-      // Wave motion influenced by audio
-      const waveSpeed1 = hasAudioData ? 1 + (trebleIntensity * 2) : 1.5;
-      const waveSpeed2 = hasAudioData ? 0.8 + (midIntensity * 1.5) : 1.3;
-      const waveSpeed3 = hasAudioData ? 1.2 + (bassIntensity * 1.8) : 0.8;
+      time += 0.03;
 
       for (let i = 0; i < barCount; i++) {
         let targetHeight;
-        let curveAmplitude;
         
         if (hasAudioData) {
-          // Use ONLY actual audio data (no animation waves)
+          // Map bars to frequency data
           const dataIndex = Math.floor((i / barCount) * dataArrayRef.current.length);
           const audioValue = dataArrayRef.current[dataIndex] / 255;
           
-          // Direct audio visualization - pure frequency data
-          targetHeight = audioValue * canvas.height * 0.85;
-          
-          // Curve amplitude reacts strongly to bass
-          curveAmplitude = 5 + (bassIntensity * 25);
+          // Direct mapping - bars go up with frequency intensity
+          targetHeight = audioValue * canvas.height * 0.8;
         } else if (isPlayingRef.current) {
-          // Fallback to smooth simulation when no audio
+          // Fallback simulation
           const wave1 = Math.sin(time + i * 0.12) * 0.5 + 0.5;
           const wave2 = Math.sin(time * 1.5 - i * 0.08) * 0.5 + 0.5;
-          const wave3 = Math.sin(time * 0.8 + i * 0.15) * 0.5 + 0.5;
-          targetHeight = ((wave1 + wave2 + wave3) / 3) * canvas.height * 0.65;
-          curveAmplitude = 8;
+          targetHeight = ((wave1 + wave2) / 2) * canvas.height * 0.6;
         } else {
           targetHeight = canvas.height * 0.05;
-          curveAmplitude = 2;
         }
 
-        // Smooth transition with audio-reactive speed
-        const smoothing = hasAudioData ? 0.25 : 0.2;
+        // Quick smoothing for responsive feel
+        const smoothing = hasAudioData ? 0.35 : 0.2;
         barHeights[i] += (targetHeight - barHeights[i]) * smoothing;
 
-        const barHeight = Math.max(barHeights[i], canvas.height * 0.02);
-        const x = i * barWidth;
+        const barHeight = Math.max(barHeights[i], canvas.height * 0.05);
+        const x = i * (barWidth + 2);
         const y = canvas.height - barHeight;
 
-        // Consistent gradient
-        const gradient = ctx.createLinearGradient(0, canvas.height, 0, y);
+        // Create gradient from bottom to top
+        const gradient = ctx.createLinearGradient(x, canvas.height, x, y);
         gradient.addColorStop(0, '#8B5CF6'); // Purple at bottom
-        gradient.addColorStop(0.6, '#A78BFA'); // Light purple mid
+        gradient.addColorStop(0.5, '#A78BFA'); // Light purple middle
         gradient.addColorStop(1, '#FBBF24'); // Yellow at top
 
         ctx.fillStyle = gradient;
-        ctx.shadowBlur = 0;
 
-        // Draw curved bars with audio-reactive curves
-        ctx.beginPath();
-        
-        // Top curve reacts to treble frequencies
-        const topCurve = hasAudioData 
-          ? Math.sin(time * (2 + trebleIntensity * 2) + i * 0.3) * curveAmplitude
-          : Math.sin(time * 1.5 + i * 0.25) * curveAmplitude;
-        
-        ctx.moveTo(x, canvas.height);
-        ctx.lineTo(x, y + 5);
-        ctx.quadraticCurveTo(
-          x + barWidth / 2,
-          y + topCurve,
-          x + barWidth - 1,
-          y + 5
-        );
-        ctx.lineTo(x + barWidth - 1, canvas.height);
-        ctx.closePath();
-        ctx.fill();
+        // Draw simple rectangular bars
+        ctx.fillRect(x, y, barWidth, barHeight);
 
-        // Glow intensity reacts to audio
-        const glowThreshold = hasAudioData ? 0.3 : 0.4;
-        if (barHeight > canvas.height * glowThreshold) {
-          const glowIntensity = hasAudioData ? 8 + (bassIntensity * 15) : 10;
-          ctx.shadowBlur = glowIntensity;
-          ctx.shadowColor = `rgba(251, 191, 36, ${0.3 + (bassIntensity * 0.4)})`;
-          ctx.fill();
+        // Add glow to taller bars
+        if (barHeight > canvas.height * 0.4) {
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = 'rgba(251, 191, 36, 0.6)';
+          ctx.fillRect(x, y, barWidth, barHeight);
           ctx.shadowBlur = 0;
         }
       }
