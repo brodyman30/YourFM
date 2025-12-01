@@ -235,7 +235,11 @@ const Player = ({ station, spotifyToken }) => {
       
       // Don't fetch audio features here - will be fetched when track actually plays
       
-      setIsPlaying(true); // Auto-play when tracks load
+      // Delay play to prevent double-start
+      setTimeout(() => {
+        console.log('▶️ Starting playback');
+        setIsPlaying(true);
+      }, 500);
     } catch (error) {
       console.error('Error loading tracks:', error);
       toast.error('Failed to load tracks');
