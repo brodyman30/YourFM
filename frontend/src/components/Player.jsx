@@ -236,21 +236,17 @@ const Player = ({ station, spotifyToken }) => {
         let curveAmplitude;
         
         if (hasAudioData) {
-          // Use actual audio data
+          // Use ONLY actual audio data (no animation waves)
           const dataIndex = Math.floor((i / barCount) * dataArrayRef.current.length);
           const audioValue = dataArrayRef.current[dataIndex] / 255;
           
-          // Add wave motion that reacts to different frequency bands
-          const bassWave = Math.sin(time * waveSpeed3 + i * 0.15) * bassIntensity * 0.3;
-          const midWave = Math.sin(time * waveSpeed2 - i * 0.1) * midIntensity * 0.2;
-          const trebleWave = Math.sin(time * waveSpeed1 + i * 0.2) * trebleIntensity * 0.15;
-          
-          targetHeight = (audioValue + bassWave + midWave + trebleWave) * canvas.height * 0.85;
+          // Direct audio visualization - pure frequency data
+          targetHeight = audioValue * canvas.height * 0.85;
           
           // Curve amplitude reacts strongly to bass
           curveAmplitude = 5 + (bassIntensity * 25);
         } else if (isPlayingRef.current) {
-          // Fallback to smooth simulation
+          // Fallback to smooth simulation when no audio
           const wave1 = Math.sin(time + i * 0.12) * 0.5 + 0.5;
           const wave2 = Math.sin(time * 1.5 - i * 0.08) * 0.5 + 0.5;
           const wave3 = Math.sin(time * 0.8 + i * 0.15) * 0.5 + 0.5;
