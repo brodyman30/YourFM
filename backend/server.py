@@ -242,6 +242,32 @@ async def get_artists_by_genre(genres: str = Query(...)):
     
     return {"artists": all_artists[:12]}
 
+@api_router.get("/spotify/audio-features/{track_id}")
+async def get_audio_features(track_id: str):
+    """Get audio features for a track (tempo, energy, etc.)"""
+    token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"})
+    
+    if not token_doc:
+        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+    
+    sp = spotipy.Spotify(auth=token_doc['access_token'])
+    
+    try:
+        features = sp.audio_features([track_id])[0]
+        if features:
+            return {
+                "tempo": features['tempo'],
+                "energy": features['energy'],
+                "danceability": features['danceability'],
+                "valence": features['valence'],
+                "loudness": features['loudness'],
+                "time_signature": features['time_signature']
+            }
+        return {"error": "No features found"}
+    except Exception as e:
+        logging.error(f"Error fetching audio features: {str(e)}")
+        return {"error": str(e)}
+
 @api_router.post("/spotify/tracks")
 async def get_tracks(request: dict):
     """Get tracks by artist IDs and similar artists"""
