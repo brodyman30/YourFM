@@ -511,23 +511,24 @@ const Player = ({ station, spotifyToken }) => {
                 const playing = !state.paused;
                 
                 // Detect if track is restarting (double-play bug)
-                const trackName = state.track_window?.current_track?.name || 'Unknown';
+                const trackName = state.track_window?.current_track?.name;
                 const currentUri = state.track_window?.current_track?.uri;
                 const currentPosition = state.position || 0;
                 
-                // Check for restart: same track, position went back to 0 after playing
-                if (currentUri === lastTrackUriRef.current && 
-                    currentPosition < 0.5 && 
-                    lastPositionRef.current > 2 &&
-                    (Date.now() - trackStartTimeRef.current) < 5000) {
-                  console.warn('⚠️ DETECTED RESTART - Preventing double-play');
-                  return; // Don't update state, let it continue from current position
+                // RESTART DETECTION: Same track URI, position reset to 0 after playing beyond 2 seconds
+                if (currentUri && 
+                    currentUri === lastTrackUriRef.current && 
+                    currentPosition < 1 && 
+                    lastPositionRef.current > 2) {
+                  console.warn('⚠️⚠️⚠️ RESTART DETECTED - Same track resetting! Blocking.');
+                  return; // Block the restart
                 }
                 
-                // Track if this is a new track starting
-                if (currentPosition < 0.5 && currentUri !== lastTrackUriRef.current) {
+                // NEW TRACK DETECTION: Different URI (natural track change)
+                if (currentUri && currentUri !== lastTrackUriRef.current && trackName) {
+                  console.log('✅ New track starting:', trackName);
+                  lastTrackUriRef.current = currentUri;
                   trackStartTimeRef.current = Date.now();
-                  console.log('▶️ NEW TRACK:', trackName);
                 }
                 
                 lastPositionRef.current = currentPosition;
