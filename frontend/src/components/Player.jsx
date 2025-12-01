@@ -41,33 +41,56 @@ const Player = ({ station, spotifyToken }) => {
 
   // Poll Spotify player state to update album art
   useEffect(() => {
-    if (!spotifyPlayer) return;
+    if (!spotifyPlayer) {
+      console.log('⚠️ No Spotify player available for polling');
+      return;
+    }
 
+    console.log('✅ Starting album art polling');
+    
     const pollInterval = setInterval(() => {
       spotifyPlayer.getCurrentState().then(state => {
-        if (!state) return;
+        if (!state) {
+          console.log('⚠️ Polling: No state available');
+          return;
+        }
         
         const track = state.track_window?.current_track;
-        if (track && track.uri !== lastTrackUriRef.current) {
-          console.log(`🔄 Polling detected track change: ${track.name}`);
+        if (!track) {
+          console.log('⚠️ Polling: No current track');
+          return;
+        }
+        
+        console.log(`🔍 Polling check - Current: ${track.name}, Last: ${lastTrackUriRef.current}`);
+        
+        if (track.uri !== lastTrackUriRef.current) {
+          console.log(`🔄 TRACK CHANGED! From: ${lastTrackUriRef.current} To: ${track.uri}`);
           lastTrackUriRef.current = track.uri;
           
           if (track.album?.images?.[0]?.url) {
-            console.log(`🎨 Updating album art from polling: ${track.name}`);
-            setCurrentAlbumArt(track.album.images[0].url);
+            const albumUrl = track.album.images[0].url;
+            console.log(`🎨 SETTING NEW ALBUM ART: ${track.name}`);
+            console.log(`🖼️ URL: ${albumUrl}`);
+            setCurrentAlbumArt(albumUrl);
             setCurrentTrackName(track.name);
+          } else {
+            console.log('⚠️ No album art URL available');
           }
           
           // Update track index
           const newIndex = tracks.findIndex(t => t.uri === track.uri);
-          if (newIndex !== -1 && newIndex !== currentTrackIndex) {
+          if (newIndex !== -1) {
+            console.log(`📍 Updating track index to: ${newIndex}`);
             setCurrentTrackIndex(newIndex);
           }
         }
-      }).catch(err => console.error('Error polling player state:', err));
+      }).catch(err => console.error('❌ Error polling player state:', err));
     }, 1000); // Poll every second
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      console.log('🛑 Stopping album art polling');
+      clearInterval(pollInterval);
+    };
   }, [spotifyPlayer, tracks]);
 
   const loadTracks = async () => {
