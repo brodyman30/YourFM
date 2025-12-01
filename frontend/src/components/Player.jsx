@@ -37,6 +37,9 @@ const Player = ({ station, spotifyToken }) => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     };
   }, [station]);
 
