@@ -146,8 +146,9 @@ async def spotify_callback(code: str):
         "expires_at": token_info['expires_at']
     })
     
-    # Redirect to frontend
-    return RedirectResponse(url="/?spotify_auth=success")
+    # Redirect to frontend - use the correct frontend URL
+    frontend_url = os.getenv('FRONTEND_URL', 'https://custom-fm-station.preview.emergentagent.com')
+    return RedirectResponse(url=f"{frontend_url}/?spotify_auth=success")
 
 @api_router.get("/spotify/token")
 async def get_spotify_token():
