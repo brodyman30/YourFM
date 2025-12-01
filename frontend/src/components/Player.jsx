@@ -1,0 +1,357 @@
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { toast } from 'sonner';
+import { Play, Pause, SkipForward, Volume2 } from 'lucide-react';
+import SpotifyPlayer from 'react-spotify-web-playback';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
+
+const Player = ({ station, spotifyToken }) => {
+  const [tracks, setTracks] = useState([]);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [currentBumper, setCurrentBumper] = useState(null);
+  const [playingBumper, setPlayingBumper] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [songsSinceLastBumper, setSongsSinceLastBumper] = useState(0);
+  const [lastProcessedTrack, setLastProcessedTrack] = useState(null);
+  const [spotifyPlayer, setSpotifyPlayer] = useState(null);
+  const canvasRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const animationRef = useRef(null);
+  const bumperAudioRef = useRef(null);
+
+  useEffect(() => {
+    if (station) {
+      loadTracks();
+      initAudioVisualizer();
+    }
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [station]);
+
+  const loadTracks = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.post(
+        `${API}/spotify/tracks`,
+        { 
+          artists: station.artists,
+          genres: station.genres || (station.genre ? [station.genre] : [])
+        }
+      );
+      setTracks(response.data.tracks);
+      setIsPlaying(true); // Auto-play when tracks load
+    } catch (error) {
+      console.error('Error loading tracks:', error);
+      toast.error('Failed to load tracks');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initAudioVisualizer = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+
+    // Simple visualizer animation
+    const animate = () => {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const barCount = 64;
+      const barWidth = canvas.width / barCount;
+
+      for (let i = 0; i < barCount; i++) {
+        // Generate random heights for demo (would use actual audio data with Web Audio API)
+        const barHeight = isPlaying
+          ? Math.random() * canvas.height * 0.8
+          : canvas.height * 0.1;
+
+        // Create gradient
+        const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
+        gradient.addColorStop(0, '#8B5CF6');
+        gradient.addColorStop(1, '#FBBF24');
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(
+          i * barWidth,
+          canvas.height - barHeight,
+          barWidth - 2,
+          barHeight
+        );
+      }
+
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animate();
+  };
+
+  const generateAndPlayBumper = async (trackInfo = null, nextTrackInfo = null) => {
+    // Prevent multiple simultaneous bumper generations
+    if (playingBumper) {
+      console.log('Bumper already playing, skipping');
+      return;
+    }
+    
+    try {
+      console.log('Starting bumper generation (volume already ducked)...');
+      setPlayingBumper(true);
+      
+      // Use provided track info or current track
+      const trackToReference = trackInfo || currentTrack;
+      
+      console.log('Generating bumper for track:', trackToReference);
+      console.log('Next track:', nextTrackInfo);
+      console.log('Station topics:', station.bumper_topics);
+      
+      const requestData = {
+        station_id: station.id,
+        topics: station.bumper_topics || [],
+        genres: station.genres || (station.genre ? [station.genre] : []),
+        artists: station.artists,
+        voice_id: station.voice_id,
+        current_track_name: trackToReference?.name || '',
+        current_track_artist: trackToReference?.artist || '',
+        next_track_name: nextTrackInfo?.name || '',
+        next_track_artist: nextTrackInfo?.artist || ''
+      };
+      
+      console.log('Bumper request data:', requestData);
+      
+      const response = await axios.post(`${API}/bumpers/generate`, requestData);
+
+      setCurrentBumper(response.data);
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Play bumper voice over ducked music
+      if (bumperAudioRef.current) {
+        bumperAudioRef.current.src = response.data.audio_url;
+        bumperAudioRef.current.volume = 1.0; // Full volume for voice
+        bumperAudioRef.current.load();
+        await bumperAudioRef.current.play();
+      }
+    } catch (error) {
+      console.error('Error generating bumper:', error);
+      toast.error('Failed to generate bumper');
+      setPlayingBumper(false);
+      // Restore Spotify volume on error
+      if (spotifyPlayer) {
+        spotifyPlayer.setVolume(1.0);
+      }
+    }
+  };
+
+  const handleBumperEnded = () => {
+    console.log('Bumper ended - fading Spotify back up');
+    setPlayingBumper(false);
+    setCurrentBumper(null);
+    
+    // Fade Spotify volume back up from 15% to 100%
+    if (spotifyPlayer) {
+      let currentVolume = 0.15;
+      const fadeUp = setInterval(() => {
+        currentVolume += 0.08;
+        if (currentVolume >= 1.0) {
+          currentVolume = 1.0;
+          clearInterval(fadeUp);
+          console.log('✓ Spotify volume fully restored');
+        }
+        spotifyPlayer.setVolume(currentVolume);
+        console.log('🎚️ Fading up to:', currentVolume.toFixed(2));
+      }, 100); // Fade up over ~1 second
+    } else {
+      console.log('⚠️ No Spotify player reference available');
+    }
+  };
+
+  const handleSpotifyStateChange = (state) => {
+    if (!state) return;
+
+    // When track ends, play bumper then next track
+    if (state.position === 0 && state.previousTracks.length > currentTrackIndex) {
+      setCurrentTrackIndex(prev => prev + 1);
+      if (station.bumper_topics.length > 0) {
+        generateAndPlayBumper();
+      }
+    }
+  };
+
+  const shouldPlayBumper = () => {
+    // Play bumper every 3-4 songs (randomized)
+    const songsBeforeBumper = Math.floor(Math.random() * 2) + 3; // 3 or 4
+    return songsSinceLastBumper >= songsBeforeBumper && station.bumper_topics.length > 0;
+  };
+
+  if (loading) {
+    return <div className="spinner" data-testid="player-loading"></div>;
+  }
+
+  if (tracks.length === 0) {
+    return (
+      <div className="text-center" style={{ marginTop: '4rem' }}>
+        <h2 style={{ color: '#FBBF24', fontSize: '2rem' }}>No tracks found</h2>
+        <p style={{ color: '#9ca3af' }}>Unable to load tracks for this station</p>
+      </div>
+    );
+  }
+
+  const currentTrack = tracks[currentTrackIndex];
+
+  return (
+    <div className="player-container" data-testid="player-container">
+      <div className="player-glow"></div>
+
+      {/* Visualizer */}
+      {/* Album Art in visualizer area */}
+      <div style={{ 
+        width: '100%', 
+        height: '300px', 
+        borderRadius: '15px', 
+        background: 'rgba(0, 0, 0, 0.2)',
+        marginBottom: '2rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {tracks[currentTrackIndex]?.image && (
+          <img 
+            key={tracks[currentTrackIndex]?.uri}
+            src={tracks[currentTrackIndex].image} 
+            alt={tracks[currentTrackIndex].name}
+            data-testid="album-art"
+            style={{
+              width: '280px',
+              height: '280px',
+              borderRadius: '12px',
+              objectFit: 'cover',
+              boxShadow: '0 20px 60px rgba(139, 92, 246, 0.5)',
+              border: '3px solid rgba(251, 191, 36, 0.3)',
+              position: 'relative',
+              zIndex: 2,
+              transition: 'opacity 0.3s ease'
+            }}
+          />
+        )}
+      </div>
+
+      <div className="player-controls">
+
+        {/* Playback info - controls handled by Spotify player below */}
+        <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: '0.9rem', marginTop: '1rem' }}>
+          {playingBumper ? 'Bumper playing...' : 'Use the player controls below to play, pause, and skip tracks'}
+        </div>
+
+        {/* Spotify Player */}
+        <div style={{ marginTop: '2rem', visibility: playingBumper ? 'hidden' : 'visible' }} data-testid="spotify-player-container">
+          {spotifyToken && tracks.length > 0 && currentTrack && (
+            <SpotifyPlayer
+              token={spotifyToken}
+              uris={tracks.map(t => t.uri)}
+              offset={currentTrackIndex}
+              play={isPlaying}
+              getPlayer={(player) => {
+                if (player && !spotifyPlayer) {
+                  console.log('✓ Spotify player instance captured');
+                  setSpotifyPlayer(player);
+                }
+              }}
+              callback={(state) => {
+                if (!state) {
+                  console.log('Spotify state is null');
+                  return;
+                }
+                
+                console.log('Spotify callback - playing:', !state.paused, 'position:', state.position, 'duration:', state.duration);
+                setIsPlaying(!state.paused);
+                
+                // ALWAYS update current track display when available
+                if (state.track_window?.current_track) {
+                  const currentUri = state.track_window.current_track.uri;
+                  const newIndex = tracks.findIndex(t => t.uri === currentUri);
+                  if (newIndex !== -1 && newIndex !== currentTrackIndex) {
+                    console.log(`🎨 Album art updated to track index ${newIndex}: ${tracks[newIndex]?.name}`);
+                    setCurrentTrackIndex(newIndex);
+                  }
+                }
+                
+                // Check if track ended (position is 0 and we just finished playing)
+                if (state.position === 0 && state.previousTracks && state.previousTracks.length > 0 && !playingBumper) {
+                  const justFinished = state.previousTracks[state.previousTracks.length - 1];
+                  
+                  // Prevent duplicate processing of the same track
+                  if (lastProcessedTrack === justFinished?.uri) {
+                    return;
+                  }
+                  
+                  console.log('Track ended:', justFinished?.name);
+                  setLastProcessedTrack(justFinished?.uri);
+                  
+                  // Increment song counter
+                  const newCount = songsSinceLastBumper + 1;
+                  setSongsSinceLastBumper(newCount);
+                  console.log(`Song count: ${newCount} (trigger at 3)`);
+                  const songsBeforeBumper = 3;
+                  
+                  // Find the track that just finished in our list
+                  const finishedTrack = tracks.find(t => t.uri === justFinished?.uri);
+                  const finishedIndex = tracks.findIndex(t => t.uri === justFinished?.uri);
+                  const nextTrack = finishedIndex !== -1 ? tracks[finishedIndex + 1] : null;
+                  
+                  if (newCount >= songsBeforeBumper && station.bumper_topics?.length > 0 && finishedTrack) {
+                    console.log(`🎙️ TRIGGERING BUMPER after ${newCount} songs`);
+                    console.log('Last track:', finishedTrack.name, 'by', finishedTrack.artist);
+                    console.log('Next track:', nextTrack?.name, 'by', nextTrack?.artist);
+                    setSongsSinceLastBumper(0); // Reset counter immediately
+                    
+                    // Duck volume IMMEDIATELY before any delay
+                    if (spotifyPlayer) {
+                      console.log('🎚️ Ducking volume immediately');
+                      spotifyPlayer.setVolume(0.15);
+                    }
+                    
+                    setTimeout(() => generateAndPlayBumper(finishedTrack, nextTrack), 500);
+                  } else {
+                    console.log(`Waiting... count=${newCount}, topics=${station.bumper_topics?.length}`);
+                  }
+                }
+              }}
+              styles={{
+                bgColor: 'rgba(139, 92, 246, 0.1)',
+                color: '#FBBF24',
+                loaderColor: '#8B5CF6',
+                sliderColor: '#8B5CF6',
+                trackArtistColor: '#9ca3af',
+                trackNameColor: '#FBBF24',
+              }}
+            />
+          )}
+        </div>
+
+        {/* Hidden audio element for bumpers */}
+        <audio
+          ref={bumperAudioRef}
+          onEnded={handleBumperEnded}
+          data-testid="bumper-audio"
+          style={{ display: 'none' }}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default Player;
