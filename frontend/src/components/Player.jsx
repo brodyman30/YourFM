@@ -107,33 +107,49 @@ const Player = ({ station, spotifyToken }) => {
 
   const connectAudioToVisualizer = async (playerInstance) => {
     try {
-      // Get the audio element from Spotify's internal player
+      console.log('🔍 Searching for Spotify audio element...');
+      
+      // Wait a bit for Spotify player to create audio element
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       const audioElements = document.querySelectorAll('audio');
+      console.log(`📻 Found ${audioElements.length} audio elements`);
+      
       let spotifyAudio = null;
       
-      // Find Spotify's audio element
-      for (const audio of audioElements) {
-        if (audio.src && audio.src.includes('spotify')) {
-          spotifyAudio = audio;
-          break;
-        }
+      // Log all audio elements
+      audioElements.forEach((audio, index) => {
+        console.log(`Audio ${index}:`, {
+          src: audio.src,
+          currentSrc: audio.currentSrc,
+          id: audio.id,
+          className: audio.className
+        });
+      });
+      
+      // Try to find Spotify's audio element (it's usually the last one or has no src initially)
+      if (audioElements.length > 0) {
+        // Usually the last audio element is Spotify's
+        spotifyAudio = audioElements[audioElements.length - 1];
+        console.log('✅ Using audio element:', spotifyAudio);
       }
       
       if (!spotifyAudio) {
-        console.log('⚠️ Could not find Spotify audio element, will retry...');
+        console.log('⚠️ No audio element found, will retry in 2 seconds...');
         setTimeout(() => connectAudioToVisualizer(playerInstance), 2000);
         return;
       }
       
-      console.log('✅ Found Spotify audio element');
-      
       // Initialize Web Audio API
       if (!audioContextRef.current) {
+        console.log('🎛️ Initializing Web Audio API...');
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         analyserRef.current = audioContextRef.current.createAnalyser();
         analyserRef.current.fftSize = 512;
         analyserRef.current.smoothingTimeConstant = 0.75;
         dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+        
+        console.log('🔌 Connecting audio source...');
         
         // Connect audio element to analyser
         const source = audioContextRef.current.createMediaElementSource(spotifyAudio);
@@ -141,9 +157,15 @@ const Player = ({ station, spotifyToken }) => {
         analyserRef.current.connect(audioContextRef.current.destination);
         
         console.log('🎵 Audio visualizer connected to Spotify playback!');
+        console.log('📊 Analyser config:', {
+          fftSize: analyserRef.current.fftSize,
+          frequencyBinCount: analyserRef.current.frequencyBinCount,
+          smoothingTimeConstant: analyserRef.current.smoothingTimeConstant
+        });
       }
     } catch (error) {
       console.error('❌ Error connecting audio to visualizer:', error);
+      console.log('Error details:', error.message);
       console.log('Falling back to simulation mode');
     }
   };
