@@ -326,6 +326,9 @@ const Player = ({ station, spotifyToken }) => {
       console.log('Next track:', nextTrackInfo);
       console.log('Station topics:', station.bumper_topics);
       
+      // Get user location for weather (using auto:ip for automatic detection)
+      const userLocation = "auto:ip";
+      
       const requestData = {
         station_id: station.id,
         topics: station.bumper_topics || [],
@@ -335,7 +338,8 @@ const Player = ({ station, spotifyToken }) => {
         current_track_name: trackToReference?.name || '',
         current_track_artist: trackToReference?.artist || '',
         next_track_name: nextTrackInfo?.name || '',
-        next_track_artist: nextTrackInfo?.artist || ''
+        next_track_artist: nextTrackInfo?.artist || '',
+        user_location: userLocation
       };
       
       console.log('Bumper request data:', requestData);
