@@ -268,90 +268,72 @@ const Player = ({ station, spotifyToken }) => {
     
     updateCanvasSize();
 
-    // Audio context will be initialized when Spotify player connects
-    // See connectAudioToVisualizer function
-    if (!audioContextRef.current) {
-      console.log('⏳ Waiting for Spotify player to connect audio...');
-    } else {
-      console.log('✅ Audio context already initialized');
-    }
+    let time = 0;
 
-    const barCount = 80;
-    const barHeights = new Array(barCount).fill(0);
-    const barTargets = new Array(barCount).fill(0);
-    let lastBounce = 0;
-
-    // Simple random bounce visualizer (like the Chrome extension)
+    // Smooth layered wave visualizer
     const animate = () => {
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const barWidth = (canvas.width / barCount) - 2;
-      const currentTime = Date.now() / 1000;
-
       if (isPlayingRef.current) {
-        // Get BPM from audio features or use default
-        const bpm = audioFeatures?.tempo || 120;
-        const beatInterval = 60 / bpm; // Seconds per beat
+        time += 0.01; // Slow, smooth animation
         
-        // Trigger bounce on beat
-        if (currentTime - lastBounce >= beatInterval) {
-          lastBounce = currentTime;
-          // Randomize target heights for all bars
-          for (let i = 0; i < barCount; i++) {
-            const randomScale = 0.3 + Math.random() * 0.7; // 30-100% height
-            barTargets[i] = canvas.height * randomScale;
+        const centerY = canvas.height / 2;
+        const waves = [
+          // Wave layers (color, amplitude, frequency, phase, lineWidth)
+          { color: 'rgba(139, 92, 246, 0.3)', amplitude: 40, frequency: 0.015, phase: 0, lineWidth: 8 },      // Purple outer
+          { color: 'rgba(167, 139, 250, 0.5)', amplitude: 35, frequency: 0.018, phase: 0.5, lineWidth: 6 },   // Light purple
+          { color: 'rgba(251, 191, 36, 0.6)', amplitude: 30, frequency: 0.02, phase: 1, lineWidth: 5 },       // Yellow
+          { color: 'rgba(251, 191, 36, 0.9)', amplitude: 25, frequency: 0.022, phase: 1.5, lineWidth: 3 }     // Bright yellow inner
+        ];
+
+        // Draw each wave layer
+        waves.forEach(wave => {
+          ctx.beginPath();
+          ctx.strokeStyle = wave.color;
+          ctx.lineWidth = wave.lineWidth;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          // Draw smooth sine wave across canvas
+          for (let x = 0; x <= canvas.width; x += 2) {
+            // Multiple sine waves for organic feel
+            const y1 = Math.sin(x * wave.frequency + time + wave.phase) * wave.amplitude;
+            const y2 = Math.sin(x * wave.frequency * 1.5 - time * 0.8 + wave.phase) * (wave.amplitude * 0.5);
+            const y3 = Math.sin(x * wave.frequency * 0.7 + time * 1.2 + wave.phase) * (wave.amplitude * 0.3);
+            
+            const y = centerY + y1 + y2 + y3;
+            
+            if (x === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
           }
-        }
 
-        // Animate bars toward their targets
-        for (let i = 0; i < barCount; i++) {
-          // Smooth interpolation with bounce decay
-          barHeights[i] += (barTargets[i] - barHeights[i]) * 0.15;
-          
-          // Decay targets back to minimum
-          barTargets[i] += (canvas.height * 0.1 - barTargets[i]) * 0.05;
+          ctx.stroke();
 
-          const barHeight = Math.max(barHeights[i], canvas.height * 0.08);
-          const x = i * (barWidth + 2);
-          const y = canvas.height - barHeight;
+          // Add glow effect
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = wave.color;
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        });
 
-          // Gradient
-          const gradient = ctx.createLinearGradient(x, canvas.height, x, y);
-          gradient.addColorStop(0, '#8B5CF6');
-          gradient.addColorStop(0.5, '#A78BFA');
-          gradient.addColorStop(1, '#FBBF24');
-
-          ctx.fillStyle = gradient;
-          ctx.fillRect(x, y, barWidth, barHeight);
-
-          // Glow on taller bars
-          if (barHeight > canvas.height * 0.3) {
-            ctx.shadowBlur = 12;
-            ctx.shadowColor = 'rgba(251, 191, 36, 0.5)';
-            ctx.fillRect(x, y, barWidth, barHeight);
-            ctx.shadowBlur = 0;
-          }
-        }
       } else {
-        // Static bars when paused
-        for (let i = 0; i < barCount; i++) {
-          const targetHeight = canvas.height * 0.08;
-          barHeights[i] = targetHeight;
-          barTargets[i] = targetHeight;
-          
-          const x = i * (barWidth + 2);
-          const y = canvas.height - targetHeight;
-          
-          ctx.fillStyle = '#8B5CF6';
-          ctx.fillRect(x, y, barWidth, targetHeight);
-        }
+        // Static flat line when paused
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
       }
 
       animationRef.current = requestAnimationFrame(animate);
     };
 
-    console.log('🎬 Starting audio-reactive animation');
+    console.log('🎬 Starting smooth wave animation');
     animate();
   };
 
