@@ -112,23 +112,42 @@ const Player = ({ station, spotifyToken }) => {
     };
   }, [spotifyPlayer, tracks]);
 
-  const fetchAudioFeatures = async (trackId) => {
+  const fetchAudioFeatures = async (trackId, trackName, artistName) => {
     try {
-      console.log('🎵 Fetching audio features for track:', trackId);
-      const response = await axios.get(`${API}/spotify/audio-features/${trackId}`);
+      console.log('🎵 Fetching audio features for:', trackName, 'by', artistName);
       
-      // Check if response has error (403 from Spotify)
-      if (response.data.error) {
-        console.warn('⚠️ Spotify API error (using defaults):', response.data.error);
-        // Keep current features (defaults), don't overwrite with error
-        return;
+      // Try RapidAPI Track Analysis first
+      try {
+        const rapidResponse = await axios.get(`${API}/track-analysis`, {
+          params: {
+            song: trackName,
+            artist: artistName
+          }
+        });
+        
+        if (rapidResponse.data && rapidResponse.data.tempo) {
+          console.log('✅ RapidAPI features received:', rapidResponse.data);
+          setAudioFeatures({
+            tempo: rapidResponse.data.tempo,
+            energy: rapidResponse.data.energy / 100 || 0.6,
+            danceability: rapidResponse.data.danceability / 100 || 0.6
+          });
+          return;
+        }
+      } catch (rapidError) {
+        console.warn('⚠️ RapidAPI not available, using defaults');
       }
       
-      console.log('✅ Audio features received:', response.data);
-      setAudioFeatures(response.data);
+      // Fallback to defaults
+      setAudioFeatures({
+        tempo: 120,
+        energy: 0.6,
+        danceability: 0.6
+      });
+      
     } catch (error) {
       console.error('❌ Error fetching audio features:', error);
-      // Keep defaults, don't update
+      // Keep defaults
     }
   };
 
