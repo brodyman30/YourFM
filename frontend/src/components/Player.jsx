@@ -33,12 +33,7 @@ const Player = ({ station, spotifyToken }) => {
   useEffect(() => {
     if (station) {
       loadTracks();
-      // Set default audio features immediately so visualizer works
-      setAudioFeatures({
-        tempo: 120,
-        energy: 0.6,
-        danceability: 0.6
-      });
+      // Don't set default features - keep it null so visualizer stays static
     }
 
     return () => {
