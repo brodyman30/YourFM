@@ -29,7 +29,6 @@ const Player = ({ station, spotifyToken }) => {
   useEffect(() => {
     if (station) {
       loadTracks();
-      initAudioVisualizer();
     }
 
     return () => {
@@ -38,6 +37,14 @@ const Player = ({ station, spotifyToken }) => {
       }
     };
   }, [station]);
+
+  // Initialize visualizer when canvas is ready
+  useEffect(() => {
+    if (canvasRef.current && !animationRef.current) {
+      console.log('🎨 Initializing audio visualizer');
+      initAudioVisualizer();
+    }
+  }, [canvasRef.current, tracks]);
 
   // Poll Spotify player state to update album art
   useEffect(() => {
