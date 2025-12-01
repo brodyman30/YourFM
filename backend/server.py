@@ -380,81 +380,86 @@ async def get_tracks(request: dict):
     logging.info(f"Got {len(selected_artist_tracks)} tracks from selected artists")
     
     # STEP 2: Get discovery tracks using SEARCH API (related-artists was deprecated Nov 2024)
-    # We'll search for tracks in the same genres with different keywords
-    logging.info("STEP 2: Fetching discovery tracks via search...")
+    # Focus on finding artists in the EXACT same genres as selected artists
+    logging.info("STEP 2: Fetching discovery tracks via targeted genre search...")
     
     # Get genres from request
     genres = request.get('genres', [])
     
-    # Search queries to find similar music
-    search_keywords = [
-        "new", "latest", "popular", "trending", "top", "best", "hot", "fresh"
-    ]
+    # First, get the actual genres of the selected artists from Spotify
+    selected_artist_genres = set()
+    for artist_id in artist_ids[:5]:
+        try:
+            artist_info = sp.artist(artist_id)
+            for g in artist_info.get('genres', []):
+                selected_artist_genres.add(g.lower())
+        except:
+            pass
+    
+    logging.info(f"Selected artist genres from Spotify: {selected_artist_genres}")
+    
+    # Combine with user-selected genres
+    all_target_genres = list(selected_artist_genres) + [g.lower() for g in genres]
+    # Remove duplicates while preserving order
+    seen = set()
+    all_target_genres = [g for g in all_target_genres if not (g in seen or seen.add(g))]
+    
+    logging.info(f"Target genres for discovery: {all_target_genres[:6]}")
     
     try:
-        for genre in genres[:3]:  # Use up to 3 genres
-            for keyword in search_keywords[:4]:  # Use different keywords
-                try:
-                    # Search for tracks in this genre
-                    query = f"{keyword} genre:{genre}"
-                    logging.info(f"Searching: {query}")
-                    results = sp.search(q=query, type='track', limit=50, market='US')
+        # Strategy 1: Search for artists in the EXACT genres and get their tracks
+        for genre in all_target_genres[:6]:  # Use top 6 genres
+            try:
+                # Search for artists in this specific genre
+                query = f'genre:"{genre}"'
+                logging.info(f"Searching artists in genre: {genre}")
+                artist_results = sp.search(q=query, type='artist', limit=30, market='US')
+                
+                found_artists = artist_results['artists']['items']
+                random.shuffle(found_artists)
+                
+                for artist in found_artists:
+                    # Skip selected artists
+                    if artist['id'] in artist_ids or artist['name'].lower() in artist_names:
+                        continue
                     
-                    for track in results['tracks']['items']:
-                        # Skip if from a selected artist
-                        if not is_selected_artist(track):
-                            add_track(track, discovery_tracks, is_discovery=True)
+                    # Verify this artist is actually in a matching genre
+                    artist_genres = [g.lower() for g in artist.get('genres', [])]
+                    genre_overlap = any(
+                        target_g in artist_g or artist_g in target_g 
+                        for target_g in all_target_genres[:6] 
+                        for artist_g in artist_genres
+                    )
+                    
+                    if not genre_overlap and artist_genres:
+                        logging.info(f"Skipping {artist['name']} - genres don't match: {artist_genres}")
+                        continue
+                    
+                    # Get tracks from this genre-matched artist
+                    try:
+                        artist_tracks = sp.artist_top_tracks(artist['id'], country='US')
+                        tracks = artist_tracks['tracks']
+                        random.shuffle(tracks)
+                        
+                        logging.info(f"Adding tracks from {artist['name']} (genres: {artist_genres[:3]})")
+                        
+                        for track in tracks[:5]:  # Up to 5 tracks per discovered artist
+                            if not is_selected_artist(track):
+                                add_track(track, discovery_tracks, is_discovery=True)
+                            
+                            if len(discovery_tracks) >= 150:
+                                break
                         
                         if len(discovery_tracks) >= 150:
                             break
-                    
-                    if len(discovery_tracks) >= 150:
-                        break
-                except Exception as search_e:
-                    logging.error(f"Search error for '{query}': {str(search_e)}")
-                    continue
-            
-            if len(discovery_tracks) >= 150:
-                break
-        
-        # Also search for artists similar to selected ones by genre
-        for artist_name in list(artist_names)[:3]:
-            try:
-                # Search for other artists in similar style
-                for genre in genres[:2]:
-                    query = f"genre:{genre}"
-                    artist_results = sp.search(q=query, type='artist', limit=20, market='US')
-                    
-                    for artist in artist_results['artists']['items']:
-                        # Skip selected artists
-                        if artist['id'] in artist_ids or artist['name'].lower() in artist_names:
-                            continue
-                        
-                        # Get tracks from this discovered artist
-                        try:
-                            artist_tracks = sp.artist_top_tracks(artist['id'], country='US')
-                            tracks = artist_tracks['tracks']
-                            random.shuffle(tracks)
-                            
-                            for track in tracks[:4]:
-                                if not is_selected_artist(track):
-                                    add_track(track, discovery_tracks, is_discovery=True)
-                                
-                                if len(discovery_tracks) >= 200:
-                                    break
-                            
-                            if len(discovery_tracks) >= 200:
-                                break
-                        except Exception:
-                            continue
-                    
-                    if len(discovery_tracks) >= 200:
-                        break
+                    except Exception:
+                        continue
                 
-                if len(discovery_tracks) >= 200:
+                if len(discovery_tracks) >= 150:
                     break
-            except Exception as e:
-                logging.error(f"Error searching similar artists: {str(e)}")
+                    
+            except Exception as search_e:
+                logging.error(f"Search error for genre '{genre}': {str(search_e)}")
                 continue
                 
     except Exception as e:
