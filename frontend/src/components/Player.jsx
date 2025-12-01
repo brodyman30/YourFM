@@ -228,11 +228,11 @@ const Player = ({ station, spotifyToken }) => {
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {tracks[currentTrackIndex]?.image && (
+        {currentTrack?.image && (
           <img 
-            key={tracks[currentTrackIndex]?.uri}
-            src={tracks[currentTrackIndex].image} 
-            alt={tracks[currentTrackIndex].name}
+            key={currentTrack.uri}
+            src={currentTrack.image} 
+            alt={currentTrack.name}
             data-testid="album-art"
             style={{
               width: '280px',
@@ -243,7 +243,7 @@ const Player = ({ station, spotifyToken }) => {
               border: '3px solid rgba(251, 191, 36, 0.3)',
               position: 'relative',
               zIndex: 2,
-              transition: 'opacity 0.3s ease'
+              transition: 'all 0.5s ease'
             }}
           />
         )}
