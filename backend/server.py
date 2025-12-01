@@ -334,12 +334,57 @@ async def get_tracks(request: dict):
     discovery_tracks = []  # 80% - tracks from similar/related artists
     seen_uris = set()
     discovery_artist_names = set()  # Track which new artists we're discovering
+    verified_artist_cache = {}  # Cache genre-verified artists
+    
+    # Define genre families for strict filtering
+    GENRE_FAMILIES = {
+        'rock': ['rock', 'metal', 'punk', 'grunge', 'alternative', 'hardcore', 'emo', 'screamo', 'post-hardcore', 'metalcore', 'deathcore', 'nu metal', 'hard rock', 'progressive'],
+        'metal': ['metal', 'rock', 'hardcore', 'metalcore', 'deathcore', 'death metal', 'black metal', 'thrash', 'doom', 'progressive metal', 'nu metal', 'djent'],
+        'hip-hop': ['hip hop', 'rap', 'trap', 'r&b', 'drill', 'grime'],
+        'pop': ['pop', 'dance pop', 'electropop', 'synth'],
+        'electronic': ['electronic', 'edm', 'house', 'techno', 'dubstep', 'drum and bass', 'trance'],
+        'country': ['country', 'americana', 'bluegrass', 'folk'],
+        'jazz': ['jazz', 'blues', 'soul', 'funk'],
+        'classical': ['classical', 'orchestra', 'symphony', 'opera'],
+        'latin': ['latin', 'reggaeton', 'salsa', 'bachata'],
+        'indie': ['indie', 'alternative', 'lo-fi', 'bedroom'],
+    }
+    
+    # Blocked genres - genres that should NEVER appear in rock/metal stations
+    BLOCKED_GENRES_MAP = {
+        'rock': ['hip hop', 'rap', 'trap', 'drill', 'reggaeton', 'latin', 'country', 'k-pop', 'j-pop', 'r&b', 'soul'],
+        'metal': ['hip hop', 'rap', 'trap', 'drill', 'reggaeton', 'latin', 'country', 'k-pop', 'j-pop', 'r&b', 'soul', 'pop'],
+        'hip-hop': ['metal', 'rock', 'punk', 'country', 'classical'],
+        'pop': ['metal', 'death', 'black metal', 'hardcore', 'screamo'],
+        'country': ['metal', 'hip hop', 'rap', 'electronic', 'techno'],
+    }
     
     def is_selected_artist(track):
         """Check if track is from a selected artist"""
         track_artist_name = track['artists'][0]['name'].lower()
         track_artist_id = track['artists'][0]['id']
         return track_artist_id in artist_ids or track_artist_name in artist_names
+    
+    def is_genre_blocked(artist_genres, station_genres):
+        """Check if artist genres are blocked for this station type"""
+        artist_genres_lower = [g.lower() for g in artist_genres]
+        
+        for station_genre in station_genres:
+            station_genre_lower = station_genre.lower()
+            blocked_list = []
+            
+            # Find blocked genres for this station type
+            for family, blocked in BLOCKED_GENRES_MAP.items():
+                if family in station_genre_lower or station_genre_lower in family:
+                    blocked_list.extend(blocked)
+            
+            # Check if any artist genre is in the blocked list
+            for artist_genre in artist_genres_lower:
+                for blocked_genre in blocked_list:
+                    if blocked_genre in artist_genre:
+                        return True, artist_genre
+        
+        return False, None
     
     def add_track(track, target_list, is_discovery=False):
         """Helper to add track avoiding duplicates"""
