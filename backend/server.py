@@ -972,11 +972,12 @@ Rules:
 - Keep it under 50 words (but shorter is fine - be natural, don't force it)
 - Be energetic and conversational
 - Mention the SPECIFIC song and artist that just played
+- If REAL WEATHER is provided, mention it naturally (e.g., "it's a beautiful 72 degrees out there...")
 - If REAL CONCERT INFO is provided, mention it naturally (e.g., "catch them live at...")
 - If topics are provided, share 1-2 UNIQUE interesting facts (never repeat the same facts)
 - Current time of day: {time_context} - you can reference this naturally
 - DO NOT make up concert dates, venues, or tour info - only use REAL CONCERT INFO if provided
-- DO NOT make up facts about weather or news
+- DO NOT make up weather - only use REAL WEATHER if provided
 - Sound natural like a real DJ
 - ALWAYS end with "on your F M, your [genre(s)] station!" or a variation like "here on your F M!"
 - Write "your F M" NOT "YOURFM" for proper pronunciation
@@ -991,12 +992,15 @@ Rules:
         # Build specific prompt with actual track info and real-time context
         topics_str = ", ".join(request.topics) if request.topics else ""
         
-        if real_time_context:
-            # We have real concert data
+        # Combine all real-time context
+        all_context = weather_context + real_time_context
+        
+        if all_context:
+            # We have real-time data (weather and/or concert)
             if next_name and next_artist:
-                prompt = f"{real_time_context}You just played '{track_name}' by {track_artist}. Mention their upcoming show naturally, then announce '{next_name}' by {next_artist} is up next. End with 'on your F M, your {genres_str} station!'"
+                prompt = f"{all_context}You just played '{track_name}' by {track_artist}. Work in the real-time info naturally, then announce '{next_name}' by {next_artist} is up next. End with 'on your F M, your {genres_str} station!'"
             else:
-                prompt = f"{real_time_context}You just played '{track_name}' by {track_artist}. Mention their upcoming show naturally, then hype what's next. End with 'on your F M, your {genres_str} station!'"
+                prompt = f"{all_context}You just played '{track_name}' by {track_artist}. Work in the real-time info naturally, then hype what's next. End with 'on your F M, your {genres_str} station!'"
         elif topics_str:
             if next_name and next_artist:
                 prompt = f"You just played '{track_name}' by {track_artist}. Share a unique interesting fact about: {topics_str} for {track_artist}. Then mention '{next_name}' by {next_artist} is coming up next. End with 'on your F M, your {genres_str} station!' or similar."
