@@ -242,31 +242,44 @@ async def get_artists_by_genre(genres: str = Query(...)):
     
     return {"artists": all_artists[:12]}
 
-@api_router.get("/spotify/audio-features/{track_id}")
-async def get_audio_features(track_id: str):
-    """Get audio features for a track (tempo, energy, etc.)"""
-    token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"})
+@api_router.get("/track-analysis")
+async def get_track_analysis(song: str, artist: str = ""):
+    """Get audio analysis from RapidAPI Track Analysis"""
+    import aiohttp
     
-    if not token_doc:
-        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+    # RapidAPI credentials from environment
+    rapidapi_key = os.environ.get('RAPIDAPI_KEY', '')
     
-    sp = spotipy.Spotify(auth=token_doc['access_token'])
+    if not rapidapi_key:
+        logging.warning("No RAPIDAPI_KEY set, returning defaults")
+        return {
+            "tempo": 120,
+            "energy": 60,
+            "danceability": 60
+        }
+    
+    url = "https://track-analysis.p.rapidapi.com/pktx/analysis"
+    params = {
+        "song": song,
+        "artist": artist
+    }
+    headers = {
+        "x-rapidapi-key": rapidapi_key,
+        "x-rapidapi-host": "track-analysis.p.rapidapi.com"
+    }
     
     try:
-        features = sp.audio_features([track_id])[0]
-        if features:
-            return {
-                "tempo": features['tempo'],
-                "energy": features['energy'],
-                "danceability": features['danceability'],
-                "valence": features['valence'],
-                "loudness": features['loudness'],
-                "time_signature": features['time_signature']
-            }
-        return {"error": "No features found"}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    logging.error(f"RapidAPI error: {response.status}")
+                    return {"tempo": 120, "energy": 60, "danceability": 60}
     except Exception as e:
-        logging.error(f"Error fetching audio features: {str(e)}")
-        return {"error": str(e)}
+        logging.error(f"Error calling RapidAPI: {str(e)}")
+        return {"tempo": 120, "energy": 60, "danceability": 60}
 
 @api_router.post("/spotify/tracks")
 async def get_tracks(request: dict):
