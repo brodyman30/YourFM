@@ -544,8 +544,8 @@ async def get_tracks(request: dict):
     logging.info(f"Got {len(discovery_tracks)} discovery tracks. New artists discovered: {len(discovery_artist_names)}")
     
     # STEP 3: Search for tracks from albums by selected artists' collaborators
-    # Only add collaborators that are in similar genres
-    logging.info("STEP 3: Finding tracks from genre-matched collaborators...")
+    # Only add collaborators that pass strict genre verification
+    logging.info("STEP 3: Finding tracks from genre-verified collaborators...")
     checked_collaborators = set()  # Avoid checking same collaborator multiple times
     
     try:
@@ -567,23 +567,12 @@ async def get_tracks(request: dict):
                                 checked_collaborators.add(track_artist['id'])
                                 
                                 if track_artist['id'] not in artist_ids and track_artist['name'].lower() not in artist_names:
-                                    # Check if collaborator is in similar genres
+                                    # Use strict genre verification
+                                    if not verify_artist_genre(track_artist['id'], track_artist['name']):
+                                        continue
+                                    
+                                    # Passed genre check - get their tracks
                                     try:
-                                        collab_info = sp.artist(track_artist['id'])
-                                        collab_genres = [g.lower() for g in collab_info.get('genres', [])]
-                                        
-                                        # Check for genre overlap
-                                        genre_match = any(
-                                            target_g in collab_g or collab_g in target_g
-                                            for target_g in all_target_genres[:8]
-                                            for collab_g in collab_genres
-                                        )
-                                        
-                                        if not genre_match and collab_genres:
-                                            logging.info(f"Skipping collaborator {track_artist['name']} - genres don't match: {collab_genres}")
-                                            continue
-                                        
-                                        # Genre matches or no genre info - get their tracks
                                         collab_tracks = sp.artist_top_tracks(track_artist['id'], country='US')
                                         collab_track_list = collab_tracks['tracks']
                                         random.shuffle(collab_track_list)
@@ -591,7 +580,7 @@ async def get_tracks(request: dict):
                                         for ct in collab_track_list[:3]:
                                             if not is_selected_artist(ct):
                                                 add_track(ct, discovery_tracks, is_discovery=True)
-                                                logging.info(f"Added track from collaborator: {track_artist['name']} (genres: {collab_genres[:2]})")
+                                                logging.info(f"Added track from verified collaborator: {track_artist['name']}")
                                             
                                             if len(discovery_tracks) >= 200:
                                                 break
