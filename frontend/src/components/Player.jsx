@@ -312,13 +312,12 @@ const Player = ({ station, spotifyToken }) => {
     <div className="player-container" data-testid="player-container">
       <div className="player-glow"></div>
 
-      {/* Visualizer */}
-      {/* Album Art in visualizer area */}
+      {/* Visualizer with Album Art */}
       <div style={{ 
         width: '100%', 
-        height: '300px', 
+        height: '400px', 
         borderRadius: '15px', 
-        background: 'rgba(0, 0, 0, 0.2)',
+        background: 'rgba(0, 0, 0, 0.3)',
         marginBottom: '2rem',
         display: 'flex',
         alignItems: 'center',
@@ -326,6 +325,21 @@ const Player = ({ station, spotifyToken }) => {
         position: 'relative',
         overflow: 'hidden'
       }}>
+        {/* Audio Visualizer Canvas */}
+        <canvas
+          ref={canvasRef}
+          data-testid="audio-visualizer"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            zIndex: 1
+          }}
+        />
+        
+        {/* Album Art on top */}
         {(currentAlbumArt || currentTrack?.image) && (
           <img 
             key={currentAlbumArt || currentTrack?.uri}
@@ -337,8 +351,8 @@ const Player = ({ station, spotifyToken }) => {
               height: '280px',
               borderRadius: '12px',
               objectFit: 'cover',
-              boxShadow: '0 20px 60px rgba(139, 92, 246, 0.5)',
-              border: '3px solid rgba(251, 191, 36, 0.3)',
+              boxShadow: '0 20px 60px rgba(139, 92, 246, 0.6), 0 0 80px rgba(251, 191, 36, 0.3)',
+              border: '3px solid rgba(251, 191, 36, 0.4)',
               position: 'relative',
               zIndex: 2,
               transition: 'all 0.5s ease'
