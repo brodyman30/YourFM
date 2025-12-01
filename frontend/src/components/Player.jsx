@@ -19,6 +19,7 @@ const Player = ({ station, spotifyToken }) => {
   const [spotifyPlayer, setSpotifyPlayer] = useState(null);
   const [currentAlbumArt, setCurrentAlbumArt] = useState(null);
   const [currentTrackName, setCurrentTrackName] = useState('');
+  const [audioFeatures, setAudioFeatures] = useState(null);
   const canvasRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
@@ -27,6 +28,7 @@ const Player = ({ station, spotifyToken }) => {
   const bumperAudioRef = useRef(null);
   const lastTrackUriRef = useRef(null);
   const isPlayingRef = useRef(true);
+  const beatPhaseRef = useRef(0);
 
   useEffect(() => {
     if (station) {
