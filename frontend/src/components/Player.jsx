@@ -121,16 +121,19 @@ const Player = ({ station, spotifyToken }) => {
     try {
       console.log('🎵 Fetching audio features for track:', trackId);
       const response = await axios.get(`${API}/spotify/audio-features/${trackId}`);
+      
+      // Check if response has error (403 from Spotify)
+      if (response.data.error) {
+        console.warn('⚠️ Spotify API error (using defaults):', response.data.error);
+        // Keep current features (defaults), don't overwrite with error
+        return;
+      }
+      
       console.log('✅ Audio features received:', response.data);
       setAudioFeatures(response.data);
     } catch (error) {
       console.error('❌ Error fetching audio features:', error);
-      // Set default values so visualizer still works
-      setAudioFeatures({
-        tempo: 120,
-        energy: 0.6,
-        danceability: 0.6
-      });
+      // Keep defaults, don't update
     }
   };
 
