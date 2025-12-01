@@ -360,29 +360,32 @@ async def get_tracks(request: dict):
     except Exception as e:
         logging.error(f"Error fetching recommendations: {str(e)}")
     
-    # Get tracks from related artists for even more variety
+    # Get tracks from related artists - THIS IS THE MAIN SOURCE (80% of library)
     try:
-        for artist_id in seed_artist_ids[:5]:  # Check related artists
+        for artist_id in seed_artist_ids[:10]:  # Check all selected artists for related
             related = sp.artist_related_artists(artist_id)
-            for related_artist in related['artists'][:10]:  # Top 10 related artists
-                related_tracks = sp.artist_top_tracks(related_artist['id'], country='US')
-                for track in related_tracks['tracks'][:5]:  # 5 tracks from each related artist
-                    if not any(t['uri'] == track['uri'] for t in all_tracks):
-                        all_tracks.append({
-                            "uri": track['uri'],
-                            "name": track['name'],
-                            "artist": track['artists'][0]['name'],
-                            "album": track['album']['name'],
-                            "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
-                            "duration_ms": track['duration_ms'],
-                            "preview_url": track.get('preview_url')
-                        })
-                        # Stop if we have enough tracks
-                        if len(all_tracks) >= 300:
-                            break
-                if len(all_tracks) >= 300:
-                    break
-            if len(all_tracks) >= 300:
+            for related_artist in related['artists'][:20]:  # Get 20 related artists per seed
+                try:
+                    related_tracks = sp.artist_top_tracks(related_artist['id'], country='US')
+                    for track in related_tracks['tracks'][:8]:  # 8 tracks from each related artist
+                        if not any(t['uri'] == track['uri'] for t in all_tracks):
+                            all_tracks.append({
+                                "uri": track['uri'],
+                                "name": track['name'],
+                                "artist": track['artists'][0]['name'],
+                                "album": track['album']['name'],
+                                "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
+                                "duration_ms": track['duration_ms'],
+                                "preview_url": track.get('preview_url')
+                            })
+                            # Stop if we have enough tracks
+                            if len(all_tracks) >= 400:
+                                break
+                    if len(all_tracks) >= 400:
+                        break
+                except Exception as track_error:
+                    continue
+            if len(all_tracks) >= 400:
                 break
     except Exception as related_error:
         logging.error(f"Error fetching related artists: {str(related_error)}")
