@@ -470,8 +470,10 @@ async def get_tracks(request: dict):
     logging.info(f"Got {len(discovery_tracks)} discovery tracks. New artists discovered: {len(discovery_artist_names)}")
     
     # STEP 3: Search for tracks from albums by selected artists' collaborators
-    # This keeps things close to the selected artists' sound
-    logging.info("STEP 3: Finding tracks from collaborators and featuring artists...")
+    # Only add collaborators that are in similar genres
+    logging.info("STEP 3: Finding tracks from genre-matched collaborators...")
+    checked_collaborators = set()  # Avoid checking same collaborator multiple times
+    
     try:
         for artist_id in shuffled_artist_ids[:5]:
             try:
@@ -486,9 +488,28 @@ async def get_tracks(request: dict):
                         for track in album_tracks['items']:
                             # Look for featuring artists (collaborators)
                             for track_artist in track['artists'][1:]:  # Skip the main artist
+                                if track_artist['id'] in checked_collaborators:
+                                    continue
+                                checked_collaborators.add(track_artist['id'])
+                                
                                 if track_artist['id'] not in artist_ids and track_artist['name'].lower() not in artist_names:
-                                    # Found a collaborator! Get their tracks
+                                    # Check if collaborator is in similar genres
                                     try:
+                                        collab_info = sp.artist(track_artist['id'])
+                                        collab_genres = [g.lower() for g in collab_info.get('genres', [])]
+                                        
+                                        # Check for genre overlap
+                                        genre_match = any(
+                                            target_g in collab_g or collab_g in target_g
+                                            for target_g in all_target_genres[:8]
+                                            for collab_g in collab_genres
+                                        )
+                                        
+                                        if not genre_match and collab_genres:
+                                            logging.info(f"Skipping collaborator {track_artist['name']} - genres don't match: {collab_genres}")
+                                            continue
+                                        
+                                        # Genre matches or no genre info - get their tracks
                                         collab_tracks = sp.artist_top_tracks(track_artist['id'], country='US')
                                         collab_track_list = collab_tracks['tracks']
                                         random.shuffle(collab_track_list)
@@ -496,7 +517,7 @@ async def get_tracks(request: dict):
                                         for ct in collab_track_list[:3]:
                                             if not is_selected_artist(ct):
                                                 add_track(ct, discovery_tracks, is_discovery=True)
-                                                logging.info(f"Added track from collaborator: {track_artist['name']}")
+                                                logging.info(f"Added track from collaborator: {track_artist['name']} (genres: {collab_genres[:2]})")
                                             
                                             if len(discovery_tracks) >= 200:
                                                 break
@@ -528,6 +549,38 @@ async def get_tracks(request: dict):
     
     # Shuffle both pools completely
     random.shuffle(discovery_tracks)
+    random.shuffle(selected_artist_tracks)
+    
+    # Pick tracks maintaining the ratio
+    final_discovery = discovery_tracks[:target_discovery]
+    final_selected = selected_artist_tracks[:target_selected]
+    
+    # If we don't have enough of one type, fill with the other
+    if len(final_discovery) < target_discovery:
+        extra_needed = target_discovery - len(final_discovery)
+        final_selected = selected_artist_tracks[:target_selected + extra_needed]
+    elif len(final_selected) < target_selected:
+        extra_needed = target_selected - len(final_selected)
+        final_discovery = discovery_tracks[:target_discovery + extra_needed]
+    
+    # IMPORTANT: Interleave selected artists throughout the playlist
+    # Instead of just shuffling together, ensure selected artists appear regularly
+    all_tracks = []
+    discovery_idx = 0
+    selected_idx = 0
+    
+    # Pattern: 4 discovery tracks, then 1 selected artist track (maintains 80/20)
+    while discovery_idx < len(final_discovery) or selected_idx < len(final_selected):
+        # Add up to 4 discovery tracks
+        for _ in range(4):
+            if discovery_idx < len(final_discovery):
+                all_tracks.append(final_discovery[discovery_idx])
+                discovery_idx += 1
+        
+        # Add 1 selected artist track
+        if selected_idx < len(final_selected):
+            all_tracks.append(final_selected[selected_idx])
+            selected_idx += 1
     random.shuffle(selected_artist_tracks)
     
     # Pick tracks maintaining the ratio
