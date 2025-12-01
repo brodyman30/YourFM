@@ -122,7 +122,7 @@ const Player = ({ station, spotifyToken }) => {
     }
   };
 
-  const initAudioVisualizer = () => {
+  const initAudioVisualizer = async () => {
     const canvas = canvasRef.current;
     if (!canvas) {
       console.log('❌ Canvas not available');
@@ -144,71 +144,107 @@ const Player = ({ station, spotifyToken }) => {
     
     updateCanvasSize();
 
-    let time = 0;
+    // Initialize Web Audio API for frequency analysis
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        analyserRef.current.smoothingTimeConstant = 0.8;
+        dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+        
+        // Try to connect to Spotify audio (may not work due to CORS)
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const source = audioContextRef.current.createMediaStreamSource(stream);
+          source.connect(analyserRef.current);
+          console.log('✅ Audio context connected');
+        } catch (err) {
+          console.log('⚠️ Could not access microphone, using simulation mode');
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Web Audio API not available, using simulation');
+    }
+
     const barCount = 80;
     const barHeights = new Array(barCount).fill(0);
+    let time = 0;
 
-    // Simple visualizer animation with curved bars
+    // Visualizer animation
     const animate = () => {
       // Clear with fade effect
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const barWidth = canvas.width / barCount;
-      time += 0.05;
+      time += 0.03;
+
+      // Get frequency data if available
+      let hasAudioData = false;
+      if (analyserRef.current && dataArrayRef.current) {
+        try {
+          analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+          hasAudioData = dataArrayRef.current.some(val => val > 0);
+        } catch (e) {
+          // Silently fail
+        }
+      }
 
       for (let i = 0; i < barCount; i++) {
-        // Create wave-like motion with sine waves
-        const wave1 = Math.sin(time + i * 0.15) * 0.5 + 0.5;
-        const wave2 = Math.sin(time * 1.3 - i * 0.1) * 0.5 + 0.5;
-        const wave3 = Math.sin(time * 0.7 + i * 0.2) * 0.5 + 0.5;
+        let targetHeight;
         
-        // Combine waves for organic movement
-        const targetHeight = isPlayingRef.current
-          ? ((wave1 + wave2 + wave3) / 3) * canvas.height * 0.7
-          : canvas.height * 0.05;
+        if (hasAudioData && isPlayingRef.current) {
+          // Use actual audio data
+          const dataIndex = Math.floor((i / barCount) * dataArrayRef.current.length);
+          const audioValue = dataArrayRef.current[dataIndex] / 255;
+          targetHeight = audioValue * canvas.height * 0.8;
+        } else if (isPlayingRef.current) {
+          // Fallback to smooth simulation
+          const wave1 = Math.sin(time + i * 0.12) * 0.5 + 0.5;
+          const wave2 = Math.sin(time * 1.5 - i * 0.08) * 0.5 + 0.5;
+          const wave3 = Math.sin(time * 0.8 + i * 0.15) * 0.5 + 0.5;
+          targetHeight = ((wave1 + wave2 + wave3) / 3) * canvas.height * 0.65;
+        } else {
+          targetHeight = canvas.height * 0.05;
+        }
 
         // Smooth transition
-        barHeights[i] += (targetHeight - barHeights[i]) * 0.15;
+        barHeights[i] += (targetHeight - barHeights[i]) * 0.2;
 
-        const barHeight = barHeights[i];
+        const barHeight = Math.max(barHeights[i], canvas.height * 0.02);
         const x = i * barWidth;
         const y = canvas.height - barHeight;
 
-        // Create gradient based on position (purple to yellow)
+        // Consistent gradient (no flashing)
         const gradient = ctx.createLinearGradient(0, canvas.height, 0, y);
-        
-        // Alternate colors for more dynamic look
-        if (i % 2 === 0) {
-          gradient.addColorStop(0, '#8B5CF6'); // Purple
-          gradient.addColorStop(1, '#FBBF24'); // Yellow
-        } else {
-          gradient.addColorStop(0, '#A78BFA'); // Light purple
-          gradient.addColorStop(1, '#FCD34D'); // Light yellow
-        }
+        gradient.addColorStop(0, '#8B5CF6'); // Purple at bottom
+        gradient.addColorStop(0.6, '#A78BFA'); // Light purple mid
+        gradient.addColorStop(1, '#FBBF24'); // Yellow at top
 
         ctx.fillStyle = gradient;
+        ctx.shadowBlur = 0;
 
-        // Draw curved bars using quadratic curves
+        // Draw smooth curved bars
         ctx.beginPath();
-        const topCurve = Math.sin(time * 2 + i * 0.3) * 10;
+        const topCurve = Math.sin(time * 1.5 + i * 0.25) * 8;
         ctx.moveTo(x, canvas.height);
-        ctx.lineTo(x, y + 10);
+        ctx.lineTo(x, y + 5);
         ctx.quadraticCurveTo(
           x + barWidth / 2,
           y + topCurve,
-          x + barWidth - 2,
-          y + 10
+          x + barWidth - 1,
+          y + 5
         );
-        ctx.lineTo(x + barWidth - 2, canvas.height);
+        ctx.lineTo(x + barWidth - 1, canvas.height);
         ctx.closePath();
         ctx.fill();
 
-        // Add glow effect on top
-        if (barHeight > canvas.height * 0.3) {
-          ctx.shadowBlur = 15;
-          ctx.shadowColor = i % 2 === 0 ? '#FBBF24' : '#8B5CF6';
-        } else {
+        // Subtle glow on taller bars
+        if (barHeight > canvas.height * 0.4) {
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = 'rgba(251, 191, 36, 0.5)';
+          ctx.fill();
           ctx.shadowBlur = 0;
         }
       }
