@@ -857,23 +857,6 @@ async def generate_bumper(request: BumperRequest):
     try:
         # Log what we received
         logging.info(f"Bumper request - Track: '{request.current_track_name}' by {request.current_track_artist}, Topics: {request.topics}")
-        # Generate bumper text using Gemini - make it more radio-style
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=str(uuid.uuid4()),
-            system_message="""You are a professional radio DJ. Generate ONLY the exact words you would say on air.
-Rules:
-- Keep it under 50 words (but shorter is fine - be natural, don't force it)
-- Be energetic and conversational
-- Mention the SPECIFIC song and artist that just played
-- If topics are provided, share 1-2 UNIQUE interesting facts (never repeat the same facts)
-- DO NOT make up facts about weather, time, news, or events
-- DO NOT include instructions or meta-text
-- Sound natural like a real DJ
-- ALWAYS end with "on your F M, your [genre(s)] station!" or a variation like "here on your F M!"
-- Write "your F M" NOT "YOURFM" for proper pronunciation
-- Output ONLY what the DJ would say"""
-        ).with_model("gemini", "gemini-2.0-flash")
         
         # Get the actual track that just played and what's coming next
         track_artist = request.current_track_artist or "an amazing track"
@@ -882,9 +865,73 @@ Rules:
         next_name = request.next_track_name or ""
         genres_str = " and ".join(request.genres) if request.genres else "music"
         
-        # Build specific prompt with actual track info
-        if request.topics and len(request.topics) > 0 and not any(word in str(request.topics).lower() for word in ['weather', 'news', 'time', 'date', 'temperature']):
-            topics_str = ", ".join(request.topics)
+        # Fetch real-time data based on topics
+        real_time_context = ""
+        
+        # Check for concert tours topic - fetch real concert data
+        if request.topics and any('concert' in t.lower() or 'tour' in t.lower() for t in request.topics):
+            concerts = await get_artist_concerts(track_artist, limit=2)
+            if concerts:
+                concert = concerts[0]
+                concert_date = concert.get('date', '')
+                if concert_date:
+                    # Parse and format the date nicely
+                    try:
+                        dt = datetime.fromisoformat(concert_date.replace('T', ' ').split('+')[0])
+                        formatted_date = dt.strftime('%B %d')  # e.g., "January 15"
+                    except:
+                        formatted_date = concert_date[:10]
+                    
+                    city = concert.get('city', '')
+                    venue = concert.get('venue', '')
+                    real_time_context = f"REAL CONCERT INFO: {track_artist} is playing {venue} in {city} on {formatted_date}. "
+                    logging.info(f"Found concert for {track_artist}: {real_time_context}")
+        
+        # Get current time for time-based mentions
+        current_time = datetime.now()
+        time_context = ""
+        hour = current_time.hour
+        if 5 <= hour < 12:
+            time_context = "morning"
+        elif 12 <= hour < 17:
+            time_context = "afternoon"
+        elif 17 <= hour < 21:
+            time_context = "evening"
+        else:
+            time_context = "late night"
+        
+        # Build the system message with topic-specific instructions
+        system_message = f"""You are a professional radio DJ. Generate ONLY the exact words you would say on air.
+Rules:
+- Keep it under 50 words (but shorter is fine - be natural, don't force it)
+- Be energetic and conversational
+- Mention the SPECIFIC song and artist that just played
+- If REAL CONCERT INFO is provided, mention it naturally (e.g., "catch them live at...")
+- If topics are provided, share 1-2 UNIQUE interesting facts (never repeat the same facts)
+- Current time of day: {time_context} - you can reference this naturally
+- DO NOT make up concert dates, venues, or tour info - only use REAL CONCERT INFO if provided
+- DO NOT make up facts about weather or news
+- Sound natural like a real DJ
+- ALWAYS end with "on your F M, your [genre(s)] station!" or a variation like "here on your F M!"
+- Write "your F M" NOT "YOURFM" for proper pronunciation
+- Output ONLY what the DJ would say"""
+
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=str(uuid.uuid4()),
+            system_message=system_message
+        ).with_model("gemini", "gemini-2.0-flash")
+        
+        # Build specific prompt with actual track info and real-time context
+        topics_str = ", ".join(request.topics) if request.topics else ""
+        
+        if real_time_context:
+            # We have real concert data
+            if next_name and next_artist:
+                prompt = f"{real_time_context}You just played '{track_name}' by {track_artist}. Mention their upcoming show naturally, then announce '{next_name}' by {next_artist} is up next. End with 'on your F M, your {genres_str} station!'"
+            else:
+                prompt = f"{real_time_context}You just played '{track_name}' by {track_artist}. Mention their upcoming show naturally, then hype what's next. End with 'on your F M, your {genres_str} station!'"
+        elif topics_str:
             if next_name and next_artist:
                 prompt = f"You just played '{track_name}' by {track_artist}. Share a unique interesting fact about: {topics_str} for {track_artist}. Then mention '{next_name}' by {next_artist} is coming up next. End with 'on your F M, your {genres_str} station!' or similar."
             else:
