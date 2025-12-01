@@ -105,6 +105,49 @@ const Player = ({ station, spotifyToken }) => {
     };
   }, [spotifyPlayer, tracks]);
 
+  const connectAudioToVisualizer = async (playerInstance) => {
+    try {
+      // Get the audio element from Spotify's internal player
+      const audioElements = document.querySelectorAll('audio');
+      let spotifyAudio = null;
+      
+      // Find Spotify's audio element
+      for (const audio of audioElements) {
+        if (audio.src && audio.src.includes('spotify')) {
+          spotifyAudio = audio;
+          break;
+        }
+      }
+      
+      if (!spotifyAudio) {
+        console.log('⚠️ Could not find Spotify audio element, will retry...');
+        setTimeout(() => connectAudioToVisualizer(playerInstance), 2000);
+        return;
+      }
+      
+      console.log('✅ Found Spotify audio element');
+      
+      // Initialize Web Audio API
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 512;
+        analyserRef.current.smoothingTimeConstant = 0.75;
+        dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+        
+        // Connect audio element to analyser
+        const source = audioContextRef.current.createMediaElementSource(spotifyAudio);
+        source.connect(analyserRef.current);
+        analyserRef.current.connect(audioContextRef.current.destination);
+        
+        console.log('🎵 Audio visualizer connected to Spotify playback!');
+      }
+    } catch (error) {
+      console.error('❌ Error connecting audio to visualizer:', error);
+      console.log('Falling back to simulation mode');
+    }
+  };
+
   const loadTracks = async () => {
     try {
       setLoading(true);
