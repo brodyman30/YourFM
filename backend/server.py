@@ -16,6 +16,7 @@ import base64
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from elevenlabs import ElevenLabs
 import io
+import aiohttp
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -37,6 +38,9 @@ eleven_client = ElevenLabs(api_key=ELEVEN_API_KEY) if ELEVEN_API_KEY else None
 
 # Gemini Client
 EMERGENT_LLM_KEY = os.getenv('EMERGENT_LLM_KEY')
+
+# Bandsintown API (for concert data)
+BANDSINTOWN_APP_ID = os.getenv('BANDSINTOWN_APP_ID', 'yourfm_radio_app')
 
 # Create the main app without a prefix
 app = FastAPI()
