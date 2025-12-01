@@ -469,42 +469,54 @@ async def get_tracks(request: dict):
     
     logging.info(f"Got {len(discovery_tracks)} discovery tracks. New artists discovered: {len(discovery_artist_names)}")
     
-    # STEP 3: Additional search-based discovery (recommendations API deprecated Nov 2024)
-    logging.info("STEP 3: Additional discovery via playlist search...")
+    # STEP 3: Search for tracks from albums by selected artists' collaborators
+    # This keeps things close to the selected artists' sound
+    logging.info("STEP 3: Finding tracks from collaborators and featuring artists...")
     try:
-        # Search for playlists in the genres
-        for genre in genres[:2]:
+        for artist_id in shuffled_artist_ids[:5]:
             try:
-                playlist_query = f"{genre} mix"
-                playlist_results = sp.search(q=playlist_query, type='playlist', limit=5, market='US')
+                # Get albums from selected artist
+                albums = sp.artist_albums(artist_id, album_type='album,single', limit=10, country='US')
                 
-                for playlist in playlist_results['playlists']['items'][:3]:
-                    if playlist and playlist.get('id'):
-                        try:
-                            # Get tracks from this playlist
-                            playlist_tracks = sp.playlist_tracks(playlist['id'], limit=30, market='US')
-                            
-                            for item in playlist_tracks['items']:
-                                if item and item.get('track'):
-                                    track = item['track']
-                                    if track and not is_selected_artist(track):
-                                        add_track(track, discovery_tracks, is_discovery=True)
-                                    
-                                    if len(discovery_tracks) >= 200:
-                                        break
-                            
-                            if len(discovery_tracks) >= 200:
-                                break
-                        except Exception:
-                            continue
+                for album in albums['items'][:5]:
+                    try:
+                        # Get tracks from album to find featuring artists
+                        album_tracks = sp.album_tracks(album['id'], limit=20)
+                        
+                        for track in album_tracks['items']:
+                            # Look for featuring artists (collaborators)
+                            for track_artist in track['artists'][1:]:  # Skip the main artist
+                                if track_artist['id'] not in artist_ids and track_artist['name'].lower() not in artist_names:
+                                    # Found a collaborator! Get their tracks
+                                    try:
+                                        collab_tracks = sp.artist_top_tracks(track_artist['id'], country='US')
+                                        collab_track_list = collab_tracks['tracks']
+                                        random.shuffle(collab_track_list)
+                                        
+                                        for ct in collab_track_list[:3]:
+                                            if not is_selected_artist(ct):
+                                                add_track(ct, discovery_tracks, is_discovery=True)
+                                                logging.info(f"Added track from collaborator: {track_artist['name']}")
+                                            
+                                            if len(discovery_tracks) >= 200:
+                                                break
+                                    except:
+                                        continue
+                                
+                                if len(discovery_tracks) >= 200:
+                                    break
+                        
+                        if len(discovery_tracks) >= 200:
+                            break
+                    except:
+                        continue
                 
                 if len(discovery_tracks) >= 200:
                     break
             except Exception as e:
-                logging.error(f"Playlist search error: {str(e)}")
                 continue
     except Exception as e:
-        logging.error(f"Error in playlist discovery: {str(e)}")
+        logging.error(f"Error finding collaborators: {str(e)}")
     
     logging.info(f"After all discovery: {len(discovery_tracks)} discovery tracks total")
     
