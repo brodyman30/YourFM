@@ -31,6 +31,8 @@ const Player = ({ station, spotifyToken }) => {
   const beatPhaseRef = useRef(0);
   const lastPositionRef = useRef(0);
   const trackStartTimeRef = useRef(0);
+  const isLoadingTracksRef = useRef(false);
+  const loadedStationIdRef = useRef(null);
 
   useEffect(() => {
     if (station) {
