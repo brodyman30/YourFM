@@ -36,6 +36,8 @@ const Player = ({ station, spotifyToken }) => {
 
   useEffect(() => {
     if (station) {
+      // Reset the loaded station ref to force fresh track loading every time
+      loadedStationIdRef.current = null;
       loadTracks();
       // Don't set default features - keep it null so visualizer stays static
     }
