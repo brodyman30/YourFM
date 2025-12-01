@@ -111,6 +111,16 @@ const Player = ({ station, spotifyToken }) => {
     };
   }, [spotifyPlayer, tracks]);
 
+  const fetchAudioFeatures = async (trackId) => {
+    try {
+      const response = await axios.get(`${API}/spotify/audio-features/${trackId}`);
+      console.log('🎵 Audio features:', response.data);
+      setAudioFeatures(response.data);
+    } catch (error) {
+      console.error('Error fetching audio features:', error);
+    }
+  };
+
   const connectAudioToVisualizer = async (playerInstance) => {
     try {
       console.log('🔍 Searching for Spotify audio element...');
