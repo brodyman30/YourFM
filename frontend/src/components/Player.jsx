@@ -254,6 +254,15 @@ const Player = ({ station, spotifyToken }) => {
 
       const barWidth = (canvas.width / barCount) - 2;
 
+      // Log state occasionally for debugging
+      if (Math.floor(time * 10) % 100 === 0) {
+        console.log('Visualizer state:', {
+          isPlaying: isPlayingRef.current,
+          hasFeatures: !!audioFeatures,
+          features: audioFeatures
+        });
+      }
+
       if (isPlayingRef.current && audioFeatures) {
         // Use Spotify audio features for beat-sync
         const tempo = audioFeatures.tempo; // BPM
