@@ -22,6 +22,7 @@ const Player = ({ station, spotifyToken }) => {
   const canvasRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
+  const dataArrayRef = useRef(null);
   const animationRef = useRef(null);
   const bumperAudioRef = useRef(null);
   const lastTrackUriRef = useRef(null);
