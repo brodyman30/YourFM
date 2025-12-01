@@ -190,27 +190,12 @@ const Player = ({ station, spotifyToken }) => {
     
     updateCanvasSize();
 
-    // Initialize Web Audio API for frequency analysis
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        analyserRef.current = audioContextRef.current.createAnalyser();
-        analyserRef.current.fftSize = 512;  // Higher resolution
-        analyserRef.current.smoothingTimeConstant = 0.75;
-        dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
-        
-        // Try to connect to system audio
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const source = audioContextRef.current.createMediaStreamSource(stream);
-          source.connect(analyserRef.current);
-          console.log('✅ Audio context connected - visualizer will react to music!');
-        } catch (err) {
-          console.log('⚠️ Microphone access denied - using simulation mode');
-        }
-      }
-    } catch (error) {
-      console.log('⚠️ Web Audio API not available, using simulation');
+    // Audio context will be initialized when Spotify player connects
+    // See connectAudioToVisualizer function
+    if (!audioContextRef.current) {
+      console.log('⏳ Waiting for Spotify player to connect audio...');
+    } else {
+      console.log('✅ Audio context already initialized');
     }
 
     const barCount = 80;
