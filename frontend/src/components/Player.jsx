@@ -228,14 +228,12 @@ const Player = ({ station, spotifyToken }) => {
           genres: station.genres || (station.genre ? [station.genre] : [])
         }
       );
-      setTracks(response.data.tracks);
       
-      // Fetch audio features for the first track
-      if (response.data.tracks.length > 0) {
-        const firstTrackId = response.data.tracks[0].uri.split(':')[2];
-        console.log('📀 Fetching features for first track:', firstTrackId);
-        fetchAudioFeatures(firstTrackId);
-      }
+      console.log(`✅ Loaded ${response.data.tracks.length} tracks for station`);
+      setTracks(response.data.tracks);
+      setCurrentTrackIndex(0); // Reset to first track
+      
+      // Don't fetch audio features here - will be fetched when track actually plays
       
       setIsPlaying(true); // Auto-play when tracks load
     } catch (error) {
