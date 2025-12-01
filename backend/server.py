@@ -244,41 +244,56 @@ async def get_artists_by_genre(genres: str = Query(...)):
 
 @api_router.get("/track-analysis")
 async def get_track_analysis(song: str, artist: str = ""):
-    """Get audio analysis from RapidAPI Track Analysis"""
+    """Get audio analysis from SoundStat.info"""
     import aiohttp
     
-    # RapidAPI credentials from environment
-    rapidapi_key = os.environ.get('RAPIDAPI_KEY', '')
-    
-    if not rapidapi_key:
-        logging.warning("No RAPIDAPI_KEY set, returning defaults")
-        return {
-            "tempo": 120,
-            "energy": 60,
-            "danceability": 60
-        }
-    
-    url = "https://track-analysis.p.rapidapi.com/pktx/analysis"
-    params = {
-        "song": song,
-        "artist": artist
-    }
-    headers = {
-        "x-rapidapi-key": rapidapi_key,
-        "x-rapidapi-host": "track-analysis.p.rapidapi.com"
-    }
+    # SoundStat API key
+    soundstat_key = "Rjuofl_E5tkz-l-LuVUqKmTaxP6dNCJOBE1VPapbAF8"
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
+            # Step 1: Search for the track
+            search_url = "https://soundstat.info/api/v1/tracks/search"
+            search_data = {
+                "artist": artist,
+                "track": song,
+                "limit": 1
+            }
+            headers = {
+                "X-API-Key": soundstat_key,
+                "accept": "application/json",
+                "Content-Type": "application/json"
+            }
+            
+            async with session.post(search_url, json=search_data, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as search_response:
+                if search_response.status == 200:
+                    search_data = await search_response.json()
+                    track_ids = search_data.get('track_ids', [])
+                    
+                    if track_ids:
+                        # Step 2: Get track analysis
+                        track_id = track_ids[0]
+                        track_url = f"https://soundstat.info/api/v1/track/{track_id}"
+                        
+                        async with session.get(track_url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as track_response:
+                            if track_response.status == 200:
+                                track_data = await track_response.json()
+                                # Extract relevant fields
+                                return {
+                                    "tempo": track_data.get('tempo', {}).get('value', 120),
+                                    "energy": int(track_data.get('energy', {}).get('value', 60) * 100),
+                                    "danceability": int(track_data.get('danceability', {}).get('value', 60) * 100)
+                                }
+                            else:
+                                logging.error(f"SoundStat track error: {track_response.status}")
                 else:
-                    logging.error(f"RapidAPI error: {response.status}")
-                    return {"tempo": 120, "energy": 60, "danceability": 60}
+                    logging.error(f"SoundStat search error: {search_response.status}")
+        
+        # Fallback to defaults
+        return {"tempo": 120, "energy": 60, "danceability": 60}
+        
     except Exception as e:
-        logging.error(f"Error calling RapidAPI: {str(e)}")
+        logging.error(f"Error calling SoundStat: {str(e)}")
         return {"tempo": 120, "energy": 60, "danceability": 60}
 
 @api_router.post("/spotify/tracks")
