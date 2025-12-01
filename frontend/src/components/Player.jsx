@@ -204,6 +204,14 @@ const Player = ({ station, spotifyToken }) => {
         }
       );
       setTracks(response.data.tracks);
+      
+      // Fetch audio features for the first track
+      if (response.data.tracks.length > 0) {
+        const firstTrackId = response.data.tracks[0].uri.split(':')[2];
+        console.log('📀 Fetching features for first track:', firstTrackId);
+        fetchAudioFeatures(firstTrackId);
+      }
+      
       setIsPlaying(true); // Auto-play when tracks load
     } catch (error) {
       console.error('Error loading tracks:', error);
