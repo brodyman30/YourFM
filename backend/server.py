@@ -581,23 +581,6 @@ async def get_tracks(request: dict):
         if selected_idx < len(final_selected):
             all_tracks.append(final_selected[selected_idx])
             selected_idx += 1
-    random.shuffle(selected_artist_tracks)
-    
-    # Pick tracks maintaining the ratio
-    final_discovery = discovery_tracks[:target_discovery]
-    final_selected = selected_artist_tracks[:target_selected]
-    
-    # If we don't have enough of one type, fill with the other
-    if len(final_discovery) < target_discovery:
-        extra_needed = target_discovery - len(final_discovery)
-        final_selected = selected_artist_tracks[:target_selected + extra_needed]
-    elif len(final_selected) < target_selected:
-        extra_needed = target_selected - len(final_selected)
-        final_discovery = discovery_tracks[:target_discovery + extra_needed]
-    
-    # Combine and shuffle completely for final randomization
-    all_tracks = final_discovery + final_selected
-    random.shuffle(all_tracks)
     
     # Log the actual artist distribution
     final_discovery_artists = set(t['artist'] for t in final_discovery)
@@ -605,7 +588,7 @@ async def get_tracks(request: dict):
     
     logging.info(f"=== FINAL TRACK MIX ===")
     logging.info(f"Discovery: {len(final_discovery)} tracks from {len(final_discovery_artists)} NEW artists")
-    logging.info(f"Selected: {len(final_selected)} tracks from selected artists")
+    logging.info(f"Selected: {len(final_selected)} tracks from selected artists: {final_selected_artists}")
     logging.info(f"Total: {len(all_tracks)} tracks")
     logging.info(f"New artists in playlist: {final_discovery_artists}")
     
