@@ -539,10 +539,15 @@ const Player = ({ station, spotifyToken }) => {
                 // Update playing state - CRITICAL for visualizer
                 const playing = !state.paused;
                 
-                // Only log significant changes
-                if (state.position < 1 || state.position > state.duration - 1) {
-                  console.log('🎵 Spotify callback - playing:', playing, 'position:', state.position?.toFixed(1), 'duration:', state.duration);
-                }
+                // Log every callback with track info to debug double-play
+                const trackName = state.track_window?.current_track?.name || 'Unknown';
+                console.log('🎵 CALLBACK:', {
+                  track: trackName,
+                  playing: playing,
+                  position: state.position?.toFixed(2),
+                  paused: state.paused,
+                  timestamp: Date.now()
+                });
                 
                 setIsPlaying(playing);
                 isPlayingRef.current = playing; // Update ref for visualizer
