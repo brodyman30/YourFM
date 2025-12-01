@@ -94,7 +94,9 @@ const Player = ({ station, spotifyToken }) => {
           
           // Fetch audio features for visualizer
           const trackId = track.uri.split(':')[2];
-          fetchAudioFeatures(trackId);
+          const trackName = track.name;
+          const artistName = track.artists?.[0]?.name || '';
+          fetchAudioFeatures(trackId, trackName, artistName);
           
           // Update track index
           const newIndex = tracks.findIndex(t => t.uri === track.uri);
