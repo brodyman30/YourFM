@@ -366,23 +366,40 @@ async def get_tracks(request: dict):
         return track_artist_id in artist_ids or track_artist_name in artist_names
     
     def is_genre_blocked(artist_genres, station_genres):
-        """Check if artist genres are blocked for this station type"""
+        """Check if artist genres are blocked for this station type.
+        IMPORTANT: If a genre is in the station's selected genres, it's NOT blocked."""
         artist_genres_lower = [g.lower() for g in artist_genres]
+        station_genres_lower = [g.lower() for g in station_genres]
         
-        for station_genre in station_genres:
-            station_genre_lower = station_genre.lower()
-            blocked_list = []
-            
+        # First, check if artist matches ANY of the selected station genres
+        # If so, they're allowed regardless of blocklist
+        for artist_genre in artist_genres_lower:
+            for station_genre in station_genres_lower:
+                if station_genre in artist_genre or artist_genre in station_genre:
+                    # Artist matches a selected genre - NOT blocked
+                    return False, None
+        
+        # Artist doesn't match any selected genre - check blocklist
+        blocked_list = set()
+        for station_genre in station_genres_lower:
             # Find blocked genres for this station type
             for family, blocked in BLOCKED_GENRES_MAP.items():
-                if family in station_genre_lower or station_genre_lower in family:
-                    blocked_list.extend(blocked)
-            
-            # Check if any artist genre is in the blocked list
-            for artist_genre in artist_genres_lower:
-                for blocked_genre in blocked_list:
-                    if blocked_genre in artist_genre:
-                        return True, artist_genre
+                if family in station_genre or station_genre in family:
+                    # Add blocked genres, BUT exclude any that are also selected genres
+                    for blocked_genre in blocked:
+                        # Don't block if this genre is selected by user
+                        is_selected = any(
+                            blocked_genre in sg or sg in blocked_genre 
+                            for sg in station_genres_lower
+                        )
+                        if not is_selected:
+                            blocked_list.add(blocked_genre)
+        
+        # Check if any artist genre is in the blocked list
+        for artist_genre in artist_genres_lower:
+            for blocked_genre in blocked_list:
+                if blocked_genre in artist_genre:
+                    return True, artist_genre
         
         return False, None
     
