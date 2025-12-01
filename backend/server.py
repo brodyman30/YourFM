@@ -299,7 +299,10 @@ async def get_track_analysis(song: str, artist: str = ""):
 
 @api_router.post("/spotify/tracks")
 async def get_tracks(request: dict):
-    """Get tracks by artist IDs and similar artists"""
+    """Get tracks with 80% discovery (similar artists) and 20% from selected artists.
+    Completely randomized on each station load."""
+    import random
+    
     token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"})
     
     if not token_doc:
@@ -307,95 +310,126 @@ async def get_tracks(request: dict):
     
     sp = spotipy.Spotify(auth=token_doc['access_token'])
     
-    # Extract artist IDs and genres from the request
+    # Extract artist IDs from the request
     artist_ids = [artist['id'] if isinstance(artist, dict) else artist for artist in request.get('artists', [])]
-    genres = request.get('genres', [])  # Now accepting multiple genres
     
-    all_tracks = []
-    seed_artist_ids = []
+    # Separate pools for selected artists vs discovery
+    selected_artist_tracks = []  # 20% - tracks FROM the selected artists
+    discovery_tracks = []  # 80% - tracks from similar/related artists
+    seen_uris = set()
     
-    # Get only 2-3 tracks from selected artists (just seeds, not the main focus)
-    for artist_id in artist_ids[:10]:  # Support up to 10 artists
+    def add_track(track, target_list):
+        """Helper to add track avoiding duplicates"""
+        if track['uri'] not in seen_uris:
+            seen_uris.add(track['uri'])
+            target_list.append({
+                "uri": track['uri'],
+                "name": track['name'],
+                "artist": track['artists'][0]['name'],
+                "album": track['album']['name'],
+                "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
+                "duration_ms": track['duration_ms'],
+                "preview_url": track.get('preview_url')
+            })
+    
+    # Shuffle artist order for variety each time
+    shuffled_artist_ids = artist_ids.copy()
+    random.shuffle(shuffled_artist_ids)
+    
+    # STEP 1: Get tracks FROM selected artists (for the 20% pool)
+    for artist_id in shuffled_artist_ids[:10]:
         try:
             results = sp.artist_top_tracks(artist_id, country='US')
-            seed_artist_ids.append(artist_id)
-            for track in results['tracks'][:2]:  # Only 2 tracks per selected artist
-                all_tracks.append({
-                    "uri": track['uri'],
-                    "name": track['name'],
-                    "artist": track['artists'][0]['name'],
-                    "album": track['album']['name'],
-                    "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
-                    "duration_ms": track['duration_ms'],
-                    "preview_url": track.get('preview_url')
-                })
+            tracks = results['tracks']
+            random.shuffle(tracks)  # Randomize which tracks we pick
+            for track in tracks[:5]:  # Up to 5 random tracks per selected artist
+                add_track(track, selected_artist_tracks)
         except Exception as e:
             logging.error(f"Error fetching tracks for artist {artist_id}: {str(e)}")
             continue
     
-    # Get multiple batches of recommendations for variety
+    # STEP 2: Get discovery tracks from RELATED artists (for the 80% pool)
     try:
-        if seed_artist_ids:
-            # Make multiple recommendation calls with different seed combinations
-            for i in range(4):  # 4 batches of recommendations
-                # Rotate through different artist combinations
-                seed_slice = seed_artist_ids[i:i+5] if len(seed_artist_ids) > i else seed_artist_ids[:5]
-                recommendations = sp.recommendations(
-                    seed_artists=seed_slice[:5],
-                    limit=50,  # Max limit per call
-                    country='US'
-                )
+        for artist_id in shuffled_artist_ids[:10]:
+            related = sp.artist_related_artists(artist_id)
+            related_artists = related['artists']
+            random.shuffle(related_artists)  # Randomize related artists
             
+            for related_artist in related_artists[:15]:
+                # Skip if this is one of the selected artists
+                if related_artist['id'] in artist_ids:
+                    continue
+                    
+                try:
+                    related_tracks = sp.artist_top_tracks(related_artist['id'], country='US')
+                    tracks = related_tracks['tracks']
+                    random.shuffle(tracks)  # Randomize tracks
+                    for track in tracks[:6]:  # Random 6 tracks from each related artist
+                        add_track(track, discovery_tracks)
+                        if len(discovery_tracks) >= 200:
+                            break
+                    if len(discovery_tracks) >= 200:
+                        break
+                except Exception:
+                    continue
+            if len(discovery_tracks) >= 200:
+                break
+    except Exception as e:
+        logging.error(f"Error fetching related artists: {str(e)}")
+    
+    # STEP 3: Get additional discovery from Spotify recommendations
+    try:
+        if shuffled_artist_ids:
+            # Multiple recommendation calls with randomized seeds
+            for _ in range(3):
+                random.shuffle(shuffled_artist_ids)
+                seed_artists = shuffled_artist_ids[:5]
+                
+                # Add some randomness to recommendation parameters
+                recommendations = sp.recommendations(
+                    seed_artists=seed_artists,
+                    limit=50,
+                    country='US',
+                    min_popularity=random.randint(20, 40),  # Vary popularity threshold
+                    target_energy=random.uniform(0.4, 0.8)  # Vary energy
+                )
+                
                 for track in recommendations['tracks']:
-                    # Avoid duplicates
-                    if not any(t['uri'] == track['uri'] for t in all_tracks):
-                        all_tracks.append({
-                            "uri": track['uri'],
-                            "name": track['name'],
-                            "artist": track['artists'][0]['name'],
-                            "album": track['album']['name'],
-                            "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
-                            "duration_ms": track['duration_ms'],
-                            "preview_url": track.get('preview_url')
-                        })
+                    # Only add if NOT from selected artists
+                    if track['artists'][0]['id'] not in artist_ids:
+                        add_track(track, discovery_tracks)
     except Exception as e:
         logging.error(f"Error fetching recommendations: {str(e)}")
     
-    # Get tracks from related artists - THIS IS THE MAIN SOURCE (80% of library)
-    try:
-        for artist_id in seed_artist_ids[:10]:  # Check all selected artists for related
-            related = sp.artist_related_artists(artist_id)
-            for related_artist in related['artists'][:20]:  # Get 20 related artists per seed
-                try:
-                    related_tracks = sp.artist_top_tracks(related_artist['id'], country='US')
-                    for track in related_tracks['tracks'][:8]:  # 8 tracks from each related artist
-                        if not any(t['uri'] == track['uri'] for t in all_tracks):
-                            all_tracks.append({
-                                "uri": track['uri'],
-                                "name": track['name'],
-                                "artist": track['artists'][0]['name'],
-                                "album": track['album']['name'],
-                                "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
-                                "duration_ms": track['duration_ms'],
-                                "preview_url": track.get('preview_url')
-                            })
-                            # Stop if we have enough tracks
-                            if len(all_tracks) >= 400:
-                                break
-                    if len(all_tracks) >= 400:
-                        break
-                except Exception as track_error:
-                    continue
-            if len(all_tracks) >= 400:
-                break
-    except Exception as related_error:
-        logging.error(f"Error fetching related artists: {str(related_error)}")
+    # STEP 4: Build final playlist with 80/20 split
+    # Target 50 tracks: 40 discovery (80%) + 10 selected artists (20%)
+    target_total = 50
+    target_discovery = int(target_total * 0.80)  # 40 tracks
+    target_selected = target_total - target_discovery  # 10 tracks
     
-    # Shuffle tracks for variety
-    import random
+    # Shuffle both pools completely
+    random.shuffle(discovery_tracks)
+    random.shuffle(selected_artist_tracks)
+    
+    # Pick tracks maintaining the ratio
+    final_discovery = discovery_tracks[:target_discovery]
+    final_selected = selected_artist_tracks[:target_selected]
+    
+    # If we don't have enough of one type, fill with the other
+    if len(final_discovery) < target_discovery:
+        extra_needed = target_discovery - len(final_discovery)
+        final_selected = selected_artist_tracks[:target_selected + extra_needed]
+    elif len(final_selected) < target_selected:
+        extra_needed = target_selected - len(final_selected)
+        final_discovery = discovery_tracks[:target_discovery + extra_needed]
+    
+    # Combine and shuffle completely for final randomization
+    all_tracks = final_discovery + final_selected
     random.shuffle(all_tracks)
     
-    return {"tracks": all_tracks[:50]}
+    logging.info(f"Track mix: {len(final_discovery)} discovery (80%) + {len(final_selected)} selected artists (20%) = {len(all_tracks)} total")
+    
+    return {"tracks": all_tracks}
 
 # Station Management Routes
 @api_router.post("/stations", response_model=Station)
