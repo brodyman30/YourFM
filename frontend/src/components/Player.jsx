@@ -280,8 +280,6 @@ const Player = ({ station, spotifyToken }) => {
     const barHeights = new Array(barCount).fill(0);
     const barTargets = new Array(barCount).fill(0);
     let lastBounce = 0;
-    const bpm = 120; // Base BPM for bounce rhythm
-    const beatInterval = 60 / bpm; // Seconds per beat
 
     // Simple random bounce visualizer (like the Chrome extension)
     const animate = () => {
