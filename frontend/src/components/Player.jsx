@@ -116,45 +116,6 @@ const Player = ({ station, spotifyToken }) => {
     };
   }, [spotifyPlayer, tracks]);
 
-  const fetchAudioFeatures = async (trackId, trackName, artistName) => {
-    try {
-      console.log('🎵 Fetching audio features for:', trackName, 'by', artistName);
-      
-      // Try RapidAPI Track Analysis first
-      try {
-        const rapidResponse = await axios.get(`${API}/track-analysis`, {
-          params: {
-            song: trackName,
-            artist: artistName
-          }
-        });
-        
-        if (rapidResponse.data && rapidResponse.data.tempo) {
-          console.log('✅ RapidAPI features received:', rapidResponse.data);
-          setAudioFeatures({
-            tempo: rapidResponse.data.tempo,
-            energy: rapidResponse.data.energy / 100 || 0.6,
-            danceability: rapidResponse.data.danceability / 100 || 0.6
-          });
-          return;
-        }
-      } catch (rapidError) {
-        console.warn('⚠️ RapidAPI not available, using defaults');
-      }
-      
-      // Fallback to defaults
-      setAudioFeatures({
-        tempo: 120,
-        energy: 0.6,
-        danceability: 0.6
-      });
-      
-    } catch (error) {
-      console.error('❌ Error fetching audio features:', error);
-      // Keep defaults
-    }
-  };
-
   const connectAudioToVisualizer = async (playerInstance) => {
     try {
       console.log('🔍 Searching for Spotify audio element...');
