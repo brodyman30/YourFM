@@ -281,23 +281,38 @@ const Player = ({ station, spotifyToken }) => {
                 console.log('Spotify callback - playing:', !state.paused, 'position:', state.position, 'duration:', state.duration);
                 setIsPlaying(!state.paused);
                 
-                // ALWAYS update current track display when available
+                // ALWAYS update current track display and album art when available
                 if (state.track_window?.current_track) {
-                  const currentUri = state.track_window.current_track.uri;
+                  const spotifyTrack = state.track_window.current_track;
+                  const currentUri = spotifyTrack.uri;
+                  
+                  // Update album art directly from Spotify's state
+                  if (spotifyTrack.album?.images?.[0]?.url) {
+                    const newAlbumArt = spotifyTrack.album.images[0].url;
+                    const newTrackName = spotifyTrack.name;
+                    
+                    if (newAlbumArt !== currentAlbumArt || newTrackName !== currentTrackName) {
+                      console.log(`🎨 Album art updated from Spotify: ${newTrackName}`);
+                      setCurrentAlbumArt(newAlbumArt);
+                      setCurrentTrackName(newTrackName);
+                    }
+                  }
+                  
+                  // Also update track index for other functionality
                   const newIndex = tracks.findIndex(t => t.uri === currentUri);
                   if (newIndex !== -1) {
                     if (newIndex !== currentTrackIndex) {
-                      console.log(`🎨 Album art updated to track index ${newIndex}: ${tracks[newIndex]?.name}`);
+                      console.log(`📍 Track index updated to ${newIndex}: ${tracks[newIndex]?.name}`);
                       setCurrentTrackIndex(newIndex);
                     }
                   } else {
                     // If track not found in our list, update by name match as fallback
                     const trackByName = tracks.findIndex(t => 
-                      t.name === state.track_window.current_track.name && 
-                      t.artist === state.track_window.current_track.artists[0]?.name
+                      t.name === spotifyTrack.name && 
+                      t.artist === spotifyTrack.artists[0]?.name
                     );
                     if (trackByName !== -1 && trackByName !== currentTrackIndex) {
-                      console.log(`🎨 Album art updated by name match to index ${trackByName}`);
+                      console.log(`📍 Track index updated by name match to ${trackByName}`);
                       setCurrentTrackIndex(trackByName);
                     }
                   }
