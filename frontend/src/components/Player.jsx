@@ -257,70 +257,39 @@ const Player = ({ station, spotifyToken }) => {
 
     const barCount = 80;
     const barHeights = new Array(barCount).fill(0);
-    let time = 0;
+    const barTargets = new Array(barCount).fill(0);
+    let lastBounce = 0;
+    const bpm = 120; // Base BPM for bounce rhythm
+    const beatInterval = 60 / bpm; // Seconds per beat
 
-    // Beat-synced visualizer using Spotify audio features
+    // Simple random bounce visualizer (like the Chrome extension)
     const animate = () => {
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const barWidth = (canvas.width / barCount) - 2;
+      const currentTime = Date.now() / 1000;
 
-      // Log state occasionally for debugging
-      if (Math.floor(time * 10) % 100 === 0) {
-        console.log('Visualizer state:', {
-          isPlaying: isPlayingRef.current,
-          hasFeatures: !!audioFeatures,
-          features: audioFeatures
-        });
-      }
+      if (isPlayingRef.current) {
+        // Trigger bounce on beat
+        if (currentTime - lastBounce >= beatInterval) {
+          lastBounce = currentTime;
+          // Randomize target heights for all bars
+          for (let i = 0; i < barCount; i++) {
+            const randomScale = 0.3 + Math.random() * 0.7; // 30-100% height
+            barTargets[i] = canvas.height * randomScale;
+          }
+        }
 
-      if (isPlayingRef.current && audioFeatures) {
-        // Use Spotify audio features for beat-sync
-        const tempo = audioFeatures.tempo; // BPM
-        const energy = audioFeatures.energy; // 0-1
-        const danceability = audioFeatures.danceability; // 0-1
-        
-        // Calculate beat timing
-        const beatInterval = 60 / tempo; // seconds per beat
-        time += 1/60; // increment by frame time (60fps)
-        
-        // Calculate where we are in the current beat (0 to 1)
-        const beatPhase = (time % beatInterval) / beatInterval;
-        
-        // Create a pulse that peaks at the start of each beat
-        // Using smooth sine wave for natural feel
-        const beatPulse = Math.sin(beatPhase * Math.PI * 2) * 0.5 + 0.5;
-        const beatStrength = beatPulse; // 0-1, peaks at 1 on beat
-        
+        // Animate bars toward their targets
         for (let i = 0; i < barCount; i++) {
-          const freqPos = i / barCount; // 0 to 1
+          // Smooth interpolation with bounce decay
+          barHeights[i] += (barTargets[i] - barHeights[i]) * 0.15;
           
-          let intensity = 0;
-          
-          // Bass (left side) - strongest on beats
-          if (freqPos < 0.3) {
-            intensity = (1 - freqPos / 0.3) * energy * beatStrength * 0.9;
-          }
-          // Mids (center) - medium response
-          else if (freqPos <= 0.7) {
-            const midPos = (freqPos - 0.3) / 0.4;
-            intensity = Math.sin(midPos * Math.PI) * danceability * beatStrength * 0.7;
-          }
-          // Treble (right side) - lighter response
-          else {
-            intensity = ((freqPos - 0.7) / 0.3) * (energy * 0.7) * beatStrength * 0.5;
-          }
-          
-          // Calculate target height
-          const minHeight = canvas.height * 0.08;
-          const maxHeight = canvas.height * 0.75;
-          const targetHeight = minHeight + (intensity * (maxHeight - minHeight));
-          
-          // Smooth interpolation
-          barHeights[i] += (targetHeight - barHeights[i]) * 0.25;
+          // Decay targets back to minimum
+          barTargets[i] += (canvas.height * 0.1 - barTargets[i]) * 0.05;
 
-          const barHeight = barHeights[i];
+          const barHeight = Math.max(barHeights[i], canvas.height * 0.08);
           const x = i * (barWidth + 2);
           const y = canvas.height - barHeight;
 
@@ -335,17 +304,18 @@ const Player = ({ station, spotifyToken }) => {
 
           // Glow on taller bars
           if (barHeight > canvas.height * 0.3) {
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = 'rgba(251, 191, 36, 0.4)';
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = 'rgba(251, 191, 36, 0.5)';
             ctx.fillRect(x, y, barWidth, barHeight);
             ctx.shadowBlur = 0;
           }
         }
       } else {
-        // Static bars when paused or no audio features
+        // Static bars when paused
         for (let i = 0; i < barCount; i++) {
           const targetHeight = canvas.height * 0.08;
           barHeights[i] = targetHeight;
+          barTargets[i] = targetHeight;
           
           const x = i * (barWidth + 2);
           const y = canvas.height - targetHeight;
