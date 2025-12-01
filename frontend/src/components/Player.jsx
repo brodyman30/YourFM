@@ -290,6 +290,10 @@ const Player = ({ station, spotifyToken }) => {
       const currentTime = Date.now() / 1000;
 
       if (isPlayingRef.current) {
+        // Get BPM from audio features or use default
+        const bpm = audioFeatures?.tempo || 120;
+        const beatInterval = 60 / bpm; // Seconds per beat
+        
         // Trigger bounce on beat
         if (currentTime - lastBounce >= beatInterval) {
           lastBounce = currentTime;
