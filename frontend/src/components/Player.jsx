@@ -152,18 +152,18 @@ const Player = ({ station, spotifyToken }) => {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         analyserRef.current = audioContextRef.current.createAnalyser();
-        analyserRef.current.fftSize = 256;
-        analyserRef.current.smoothingTimeConstant = 0.8;
+        analyserRef.current.fftSize = 512;  // Higher resolution
+        analyserRef.current.smoothingTimeConstant = 0.75;
         dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
         
-        // Try to connect to Spotify audio (may not work due to CORS)
+        // Try to connect to system audio
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           const source = audioContextRef.current.createMediaStreamSource(stream);
           source.connect(analyserRef.current);
-          console.log('✅ Audio context connected');
+          console.log('✅ Audio context connected - visualizer will react to music!');
         } catch (err) {
-          console.log('⚠️ Could not access microphone, using simulation mode');
+          console.log('⚠️ Microphone access denied - using simulation mode');
         }
       }
     } catch (error) {
@@ -173,53 +173,103 @@ const Player = ({ station, spotifyToken }) => {
     const barCount = 80;
     const barHeights = new Array(barCount).fill(0);
     let time = 0;
+    let bassIntensity = 0;
+    let midIntensity = 0;
+    let trebleIntensity = 0;
 
     // Visualizer animation
     const animate = () => {
       // Clear with fade effect
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const barWidth = canvas.width / barCount;
-      time += 0.03;
 
-      // Get frequency data if available
+      // Get frequency data and analyze bands
       let hasAudioData = false;
-      if (analyserRef.current && dataArrayRef.current) {
+      if (analyserRef.current && dataArrayRef.current && isPlayingRef.current) {
         try {
           analyserRef.current.getByteFrequencyData(dataArrayRef.current);
           hasAudioData = dataArrayRef.current.some(val => val > 0);
+          
+          if (hasAudioData) {
+            // Analyze frequency bands (bass, mid, treble)
+            const third = Math.floor(dataArrayRef.current.length / 3);
+            
+            // Bass (low frequencies)
+            let bassSum = 0;
+            for (let i = 0; i < third; i++) {
+              bassSum += dataArrayRef.current[i];
+            }
+            bassIntensity = (bassSum / third) / 255;
+            
+            // Mid frequencies
+            let midSum = 0;
+            for (let i = third; i < third * 2; i++) {
+              midSum += dataArrayRef.current[i];
+            }
+            midIntensity = (midSum / third) / 255;
+            
+            // Treble (high frequencies)
+            let trebleSum = 0;
+            for (let i = third * 2; i < dataArrayRef.current.length; i++) {
+              trebleSum += dataArrayRef.current[i];
+            }
+            trebleIntensity = (trebleSum / (dataArrayRef.current.length - third * 2)) / 255;
+          }
         } catch (e) {
-          // Silently fail
+          hasAudioData = false;
         }
       }
 
+      // Time speed controlled by mid frequencies (makes wave speed react to music)
+      const timeSpeed = hasAudioData ? 0.02 + (midIntensity * 0.08) : 0.03;
+      time += timeSpeed;
+
+      // Wave motion influenced by audio
+      const waveSpeed1 = hasAudioData ? 1 + (trebleIntensity * 2) : 1.5;
+      const waveSpeed2 = hasAudioData ? 0.8 + (midIntensity * 1.5) : 1.3;
+      const waveSpeed3 = hasAudioData ? 1.2 + (bassIntensity * 1.8) : 0.8;
+
       for (let i = 0; i < barCount; i++) {
         let targetHeight;
+        let curveAmplitude;
         
-        if (hasAudioData && isPlayingRef.current) {
+        if (hasAudioData) {
           // Use actual audio data
           const dataIndex = Math.floor((i / barCount) * dataArrayRef.current.length);
           const audioValue = dataArrayRef.current[dataIndex] / 255;
-          targetHeight = audioValue * canvas.height * 0.8;
+          
+          // Add wave motion that reacts to different frequency bands
+          const bassWave = Math.sin(time * waveSpeed3 + i * 0.15) * bassIntensity * 0.3;
+          const midWave = Math.sin(time * waveSpeed2 - i * 0.1) * midIntensity * 0.2;
+          const trebleWave = Math.sin(time * waveSpeed1 + i * 0.2) * trebleIntensity * 0.15;
+          
+          targetHeight = (audioValue + bassWave + midWave + trebleWave) * canvas.height * 0.85;
+          
+          // Curve amplitude reacts strongly to bass
+          curveAmplitude = 5 + (bassIntensity * 25);
         } else if (isPlayingRef.current) {
           // Fallback to smooth simulation
           const wave1 = Math.sin(time + i * 0.12) * 0.5 + 0.5;
           const wave2 = Math.sin(time * 1.5 - i * 0.08) * 0.5 + 0.5;
           const wave3 = Math.sin(time * 0.8 + i * 0.15) * 0.5 + 0.5;
           targetHeight = ((wave1 + wave2 + wave3) / 3) * canvas.height * 0.65;
+          curveAmplitude = 8;
         } else {
           targetHeight = canvas.height * 0.05;
+          curveAmplitude = 2;
         }
 
-        // Smooth transition
-        barHeights[i] += (targetHeight - barHeights[i]) * 0.2;
+        // Smooth transition with audio-reactive speed
+        const smoothing = hasAudioData ? 0.25 : 0.2;
+        barHeights[i] += (targetHeight - barHeights[i]) * smoothing;
 
         const barHeight = Math.max(barHeights[i], canvas.height * 0.02);
         const x = i * barWidth;
         const y = canvas.height - barHeight;
 
-        // Consistent gradient (no flashing)
+        // Consistent gradient
         const gradient = ctx.createLinearGradient(0, canvas.height, 0, y);
         gradient.addColorStop(0, '#8B5CF6'); // Purple at bottom
         gradient.addColorStop(0.6, '#A78BFA'); // Light purple mid
@@ -228,9 +278,14 @@ const Player = ({ station, spotifyToken }) => {
         ctx.fillStyle = gradient;
         ctx.shadowBlur = 0;
 
-        // Draw smooth curved bars
+        // Draw curved bars with audio-reactive curves
         ctx.beginPath();
-        const topCurve = Math.sin(time * 1.5 + i * 0.25) * 8;
+        
+        // Top curve reacts to treble frequencies
+        const topCurve = hasAudioData 
+          ? Math.sin(time * (2 + trebleIntensity * 2) + i * 0.3) * curveAmplitude
+          : Math.sin(time * 1.5 + i * 0.25) * curveAmplitude;
+        
         ctx.moveTo(x, canvas.height);
         ctx.lineTo(x, y + 5);
         ctx.quadraticCurveTo(
@@ -243,10 +298,12 @@ const Player = ({ station, spotifyToken }) => {
         ctx.closePath();
         ctx.fill();
 
-        // Subtle glow on taller bars
-        if (barHeight > canvas.height * 0.4) {
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = 'rgba(251, 191, 36, 0.5)';
+        // Glow intensity reacts to audio
+        const glowThreshold = hasAudioData ? 0.3 : 0.4;
+        if (barHeight > canvas.height * glowThreshold) {
+          const glowIntensity = hasAudioData ? 8 + (bassIntensity * 15) : 10;
+          ctx.shadowBlur = glowIntensity;
+          ctx.shadowColor = `rgba(251, 191, 36, ${0.3 + (bassIntensity * 0.4)})`;
           ctx.fill();
           ctx.shadowBlur = 0;
         }
@@ -255,7 +312,7 @@ const Player = ({ station, spotifyToken }) => {
       animationRef.current = requestAnimationFrame(animate);
     };
 
-    console.log('🎬 Starting animation');
+    console.log('🎬 Starting audio-reactive animation');
     animate();
   };
 
