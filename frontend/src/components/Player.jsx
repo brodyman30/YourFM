@@ -527,6 +527,7 @@ const Player = ({ station, spotifyToken }) => {
                 if (player && !spotifyPlayer) {
                   console.log('✓ Spotify player instance captured');
                   setSpotifyPlayer(player);
+                  setPlayerReady(true);
                   
                   // Try to connect audio visualizer to Spotify player
                   if (player._player) {
