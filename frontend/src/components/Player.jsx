@@ -39,6 +39,37 @@ const Player = ({ station, spotifyToken }) => {
     };
   }, [station]);
 
+  // Poll Spotify player state to update album art
+  useEffect(() => {
+    if (!spotifyPlayer) return;
+
+    const pollInterval = setInterval(() => {
+      spotifyPlayer.getCurrentState().then(state => {
+        if (!state) return;
+        
+        const track = state.track_window?.current_track;
+        if (track && track.uri !== lastTrackUriRef.current) {
+          console.log(`🔄 Polling detected track change: ${track.name}`);
+          lastTrackUriRef.current = track.uri;
+          
+          if (track.album?.images?.[0]?.url) {
+            console.log(`🎨 Updating album art from polling: ${track.name}`);
+            setCurrentAlbumArt(track.album.images[0].url);
+            setCurrentTrackName(track.name);
+          }
+          
+          // Update track index
+          const newIndex = tracks.findIndex(t => t.uri === track.uri);
+          if (newIndex !== -1 && newIndex !== currentTrackIndex) {
+            setCurrentTrackIndex(newIndex);
+          }
+        }
+      }).catch(err => console.error('Error polling player state:', err));
+    }, 1000); // Poll every second
+
+    return () => clearInterval(pollInterval);
+  }, [spotifyPlayer, tracks]);
+
   const loadTracks = async () => {
     try {
       setLoading(true);
