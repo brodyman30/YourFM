@@ -39,7 +39,8 @@ const StationCreator = ({ station, onStationCreated, onCancel }) => {
     'music influences',
     'behind the scenes',
     'chart performance',
-    'fan favorites'
+    'fan favorites',
+    'local weather'  // Real-time weather updates
   ];
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
