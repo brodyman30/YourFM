@@ -287,34 +287,37 @@ const Player = ({ station, spotifyToken }) => {
                   const spotifyTrack = state.track_window.current_track;
                   const currentUri = spotifyTrack.uri;
                   
-                  // Update album art directly from Spotify's state
-                  if (spotifyTrack.album?.images?.[0]?.url) {
-                    const newAlbumArt = spotifyTrack.album.images[0].url;
-                    const newTrackName = spotifyTrack.name;
+                  // Check if track actually changed using ref
+                  if (lastTrackUriRef.current !== currentUri) {
+                    console.log(`🎵 Track changed! Old: ${lastTrackUriRef.current}, New: ${currentUri}`);
+                    lastTrackUriRef.current = currentUri;
                     
-                    if (newAlbumArt !== currentAlbumArt || newTrackName !== currentTrackName) {
-                      console.log(`🎨 Album art updated from Spotify: ${newTrackName}`);
+                    // Update album art directly from Spotify's state
+                    if (spotifyTrack.album?.images?.[0]?.url) {
+                      const newAlbumArt = spotifyTrack.album.images[0].url;
+                      const newTrackName = spotifyTrack.name;
+                      
+                      console.log(`🎨 UPDATING Album art for: ${newTrackName}`);
+                      console.log(`🖼️ New album art URL: ${newAlbumArt.substring(0, 50)}...`);
                       setCurrentAlbumArt(newAlbumArt);
                       setCurrentTrackName(newTrackName);
                     }
-                  }
-                  
-                  // Also update track index for other functionality
-                  const newIndex = tracks.findIndex(t => t.uri === currentUri);
-                  if (newIndex !== -1) {
-                    if (newIndex !== currentTrackIndex) {
+                    
+                    // Also update track index for other functionality
+                    const newIndex = tracks.findIndex(t => t.uri === currentUri);
+                    if (newIndex !== -1) {
                       console.log(`📍 Track index updated to ${newIndex}: ${tracks[newIndex]?.name}`);
                       setCurrentTrackIndex(newIndex);
-                    }
-                  } else {
-                    // If track not found in our list, update by name match as fallback
-                    const trackByName = tracks.findIndex(t => 
-                      t.name === spotifyTrack.name && 
-                      t.artist === spotifyTrack.artists[0]?.name
-                    );
-                    if (trackByName !== -1 && trackByName !== currentTrackIndex) {
-                      console.log(`📍 Track index updated by name match to ${trackByName}`);
-                      setCurrentTrackIndex(trackByName);
+                    } else {
+                      // If track not found in our list, update by name match as fallback
+                      const trackByName = tracks.findIndex(t => 
+                        t.name === spotifyTrack.name && 
+                        t.artist === spotifyTrack.artists[0]?.name
+                      );
+                      if (trackByName !== -1) {
+                        console.log(`📍 Track index updated by name match to ${trackByName}`);
+                        setCurrentTrackIndex(trackByName);
+                      }
                     }
                   }
                 }
