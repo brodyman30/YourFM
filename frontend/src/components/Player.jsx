@@ -239,6 +239,7 @@ const Player = ({ station, spotifyToken }) => {
     const barCount = 80;
     const barHeights = new Array(barCount).fill(0);
     let time = 0;
+    let lastBeat = 0;
 
     // Visualizer animation
     const animate = () => {
@@ -247,75 +248,90 @@ const Player = ({ station, spotifyToken }) => {
 
       const barWidth = (canvas.width / barCount) - 2;
 
-      // Get frequency data
-      let hasAudioData = false;
-      if (analyserRef.current && dataArrayRef.current && isPlayingRef.current) {
-        try {
-          analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-          hasAudioData = dataArrayRef.current.some(val => val > 0);
-          
-          // Log audio data periodically (every 2 seconds)
-          if (Math.floor(time * 10) % 60 === 0) {
-            const avgValue = dataArrayRef.current.reduce((a, b) => a + b, 0) / dataArrayRef.current.length;
-            console.log('🎵 Audio data:', {
-              hasData: hasAudioData,
-              average: avgValue.toFixed(2),
-              max: Math.max(...dataArrayRef.current),
-              sample: Array.from(dataArrayRef.current.slice(0, 10))
-            });
-          }
-        } catch (e) {
-          hasAudioData = false;
-          console.error('Error getting frequency data:', e);
-        }
-      }
-
-      time += 0.03;
-
-      for (let i = 0; i < barCount; i++) {
-        let targetHeight;
+      // Use Spotify audio features if available
+      const tempo = audioFeatures?.tempo || 120; // BPM
+      const energy = audioFeatures?.energy || 0.5; // 0-1
+      const danceability = audioFeatures?.danceability || 0.5; // 0-1
+      
+      // Calculate beat interval in seconds
+      const beatInterval = 60 / tempo;
+      
+      if (isPlayingRef.current) {
+        time += 1/60; // Assuming 60fps
         
-        if (hasAudioData) {
-          // Map bars to frequency data
-          const dataIndex = Math.floor((i / barCount) * dataArrayRef.current.length);
-          const audioValue = dataArrayRef.current[dataIndex] / 255;
+        // Track beat phase
+        beatPhaseRef.current = (time % beatInterval) / beatInterval;
+        
+        // Create beat pulse (0-1, peaks at each beat)
+        const beatPulse = Math.sin(beatPhaseRef.current * Math.PI * 2) * 0.5 + 0.5;
+        const beatStrength = Math.pow(beatPulse, 3); // Make it punchier
+      
+        for (let i = 0; i < barCount; i++) {
+          // Create frequency-like distribution across bars
+          const freqPos = i / barCount;
           
-          // Direct mapping - bars go up with frequency intensity
-          targetHeight = audioValue * canvas.height * 0.8;
-        } else if (isPlayingRef.current) {
-          // Fallback simulation
-          const wave1 = Math.sin(time + i * 0.12) * 0.5 + 0.5;
-          const wave2 = Math.sin(time * 1.5 - i * 0.08) * 0.5 + 0.5;
-          targetHeight = ((wave1 + wave2) / 2) * canvas.height * 0.6;
-        } else {
-          targetHeight = canvas.height * 0.05;
-        }
+          // Bass frequencies (left side)
+          const bassContribution = freqPos < 0.3 
+            ? (1 - freqPos / 0.3) * energy * beatStrength
+            : 0;
+          
+          // Mid frequencies (center)
+          const midContribution = (freqPos >= 0.3 && freqPos <= 0.7)
+            ? Math.sin((freqPos - 0.3) / 0.4 * Math.PI) * danceability * beatStrength * 0.8
+            : 0;
+          
+          // Treble frequencies (right side)
+          const trebleContribution = freqPos > 0.7
+            ? ((freqPos - 0.7) / 0.3) * energy * beatStrength * 0.6
+            : 0;
+          
+          // Add some wave motion for variety
+          const wave1 = Math.sin(time * 2 + i * 0.15) * 0.15 * energy;
+          const wave2 = Math.sin(time * 3 - i * 0.1) * 0.1 * danceability;
+          
+          // Combine all contributions
+          const combined = bassContribution + midContribution + trebleContribution + wave1 + wave2;
+          const targetHeight = Math.max(combined * canvas.height * 0.85, canvas.height * 0.08);
+          
+          // Quick smoothing for bouncy feel
+          const smoothing = 0.4;
+          barHeights[i] += (targetHeight - barHeights[i]) * smoothing;
 
-        // Quick smoothing for responsive feel
-        const smoothing = hasAudioData ? 0.35 : 0.2;
-        barHeights[i] += (targetHeight - barHeights[i]) * smoothing;
+          const barHeight = barHeights[i];
+          const x = i * (barWidth + 2);
+          const y = canvas.height - barHeight;
 
-        const barHeight = Math.max(barHeights[i], canvas.height * 0.05);
-        const x = i * (barWidth + 2);
-        const y = canvas.height - barHeight;
+          // Create gradient from bottom to top
+          const gradient = ctx.createLinearGradient(x, canvas.height, x, y);
+          gradient.addColorStop(0, '#8B5CF6'); // Purple at bottom
+          gradient.addColorStop(0.5, '#A78BFA'); // Light purple middle
+          gradient.addColorStop(1, '#FBBF24'); // Yellow at top
 
-        // Create gradient from bottom to top
-        const gradient = ctx.createLinearGradient(x, canvas.height, x, y);
-        gradient.addColorStop(0, '#8B5CF6'); // Purple at bottom
-        gradient.addColorStop(0.5, '#A78BFA'); // Light purple middle
-        gradient.addColorStop(1, '#FBBF24'); // Yellow at top
+          ctx.fillStyle = gradient;
 
-        ctx.fillStyle = gradient;
-
-        // Draw simple rectangular bars
-        ctx.fillRect(x, y, barWidth, barHeight);
-
-        // Add glow to taller bars
-        if (barHeight > canvas.height * 0.4) {
-          ctx.shadowBlur = 15;
-          ctx.shadowColor = 'rgba(251, 191, 36, 0.6)';
+          // Draw simple rectangular bars
           ctx.fillRect(x, y, barWidth, barHeight);
-          ctx.shadowBlur = 0;
+
+          // Add glow to taller bars (more glow on beats)
+          if (barHeight > canvas.height * 0.3) {
+            ctx.shadowBlur = 10 + (beatStrength * 15);
+            ctx.shadowColor = `rgba(251, 191, 36, ${0.4 + beatStrength * 0.4})`;
+            ctx.fillRect(x, y, barWidth, barHeight);
+            ctx.shadowBlur = 0;
+          }
+        }
+      } else {
+        // Paused state - minimal bars
+        for (let i = 0; i < barCount; i++) {
+          const targetHeight = canvas.height * 0.05;
+          barHeights[i] += (targetHeight - barHeights[i]) * 0.1;
+          
+          const barHeight = barHeights[i];
+          const x = i * (barWidth + 2);
+          const y = canvas.height - barHeight;
+          
+          ctx.fillStyle = '#8B5CF6';
+          ctx.fillRect(x, y, barWidth, barHeight);
         }
       }
 
