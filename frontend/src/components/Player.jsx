@@ -449,7 +449,7 @@ const Player = ({ station, spotifyToken }) => {
     );
   }
 
-  const currentTrack = tracks[currentTrackIndex];
+  const currentTrack = useMemo(() => tracks[currentTrackIndex], [tracks, currentTrackIndex]);
 
   return (
     <div className="player-container" data-testid="player-container">
