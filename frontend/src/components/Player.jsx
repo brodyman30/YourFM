@@ -239,7 +239,6 @@ const Player = ({ station, spotifyToken }) => {
     const barCount = 80;
     const barHeights = new Array(barCount).fill(0);
     let time = 0;
-    let lastBeat = 0;
 
     // Visualizer animation
     const animate = () => {
@@ -259,42 +258,38 @@ const Player = ({ station, spotifyToken }) => {
       if (isPlayingRef.current) {
         time += 1/60; // Assuming 60fps
         
-        // Track beat phase
+        // Track beat phase (0 to 1 over one beat)
         beatPhaseRef.current = (time % beatInterval) / beatInterval;
         
         // Create beat pulse (0-1, peaks at each beat)
         const beatPulse = Math.sin(beatPhaseRef.current * Math.PI * 2) * 0.5 + 0.5;
-        const beatStrength = Math.pow(beatPulse, 3); // Make it punchier
+        const beatStrength = Math.pow(beatPulse, 2); // Smoother pulse
       
         for (let i = 0; i < barCount; i++) {
-          // Create frequency-like distribution across bars
+          // Create frequency-like distribution across bars (NO WAVES)
           const freqPos = i / barCount;
           
-          // Bass frequencies (left side)
-          const bassContribution = freqPos < 0.3 
-            ? (1 - freqPos / 0.3) * energy * beatStrength
-            : 0;
+          let barIntensity = 0;
           
-          // Mid frequencies (center)
-          const midContribution = (freqPos >= 0.3 && freqPos <= 0.7)
-            ? Math.sin((freqPos - 0.3) / 0.4 * Math.PI) * danceability * beatStrength * 0.8
-            : 0;
+          // Bass frequencies (left side) - bounce on beats
+          if (freqPos < 0.3) {
+            barIntensity = (1 - freqPos / 0.3) * energy * beatStrength * 0.8;
+          }
+          // Mid frequencies (center) - moderate bounce
+          else if (freqPos >= 0.3 && freqPos <= 0.7) {
+            const midPos = (freqPos - 0.3) / 0.4;
+            barIntensity = Math.sin(midPos * Math.PI) * danceability * beatStrength * 0.6;
+          }
+          // Treble frequencies (right side) - light bounce
+          else {
+            barIntensity = ((freqPos - 0.7) / 0.3) * energy * beatStrength * 0.5;
+          }
           
-          // Treble frequencies (right side)
-          const trebleContribution = freqPos > 0.7
-            ? ((freqPos - 0.7) / 0.3) * energy * beatStrength * 0.6
-            : 0;
+          // Set target height based on beat
+          const targetHeight = barIntensity * canvas.height * 0.75 + canvas.height * 0.1;
           
-          // Add some wave motion for variety
-          const wave1 = Math.sin(time * 2 + i * 0.15) * 0.15 * energy;
-          const wave2 = Math.sin(time * 3 - i * 0.1) * 0.1 * danceability;
-          
-          // Combine all contributions
-          const combined = bassContribution + midContribution + trebleContribution + wave1 + wave2;
-          const targetHeight = Math.max(combined * canvas.height * 0.85, canvas.height * 0.08);
-          
-          // Quick smoothing for bouncy feel
-          const smoothing = 0.4;
+          // Smooth transition
+          const smoothing = 0.3;
           barHeights[i] += (targetHeight - barHeights[i]) * smoothing;
 
           const barHeight = barHeights[i];
@@ -312,10 +307,10 @@ const Player = ({ station, spotifyToken }) => {
           // Draw simple rectangular bars
           ctx.fillRect(x, y, barWidth, barHeight);
 
-          // Add glow to taller bars (more glow on beats)
-          if (barHeight > canvas.height * 0.3) {
-            ctx.shadowBlur = 10 + (beatStrength * 15);
-            ctx.shadowColor = `rgba(251, 191, 36, ${0.4 + beatStrength * 0.4})`;
+          // Add glow to taller bars
+          if (barHeight > canvas.height * 0.4) {
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = 'rgba(251, 191, 36, 0.5)';
             ctx.fillRect(x, y, barWidth, barHeight);
             ctx.shadowBlur = 0;
           }
@@ -323,7 +318,7 @@ const Player = ({ station, spotifyToken }) => {
       } else {
         // Paused state - minimal bars
         for (let i = 0; i < barCount; i++) {
-          const targetHeight = canvas.height * 0.05;
+          const targetHeight = canvas.height * 0.1;
           barHeights[i] += (targetHeight - barHeights[i]) * 0.1;
           
           const barHeight = barHeights[i];
