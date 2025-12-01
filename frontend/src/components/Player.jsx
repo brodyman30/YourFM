@@ -180,8 +180,18 @@ const Player = ({ station, spotifyToken }) => {
   };
 
   const loadTracks = async () => {
+    // Prevent duplicate loading
+    if (isLoadingTracksRef.current || loadedStationIdRef.current === station._id) {
+      console.log('⏭️ Already loading or loaded this station, skipping');
+      return;
+    }
+    
     try {
+      isLoadingTracksRef.current = true;
       setLoading(true);
+      
+      console.log(`🎵 Loading tracks for station: ${station.name}`);
+      
       const response = await axios.post(
         `${API}/spotify/tracks`,
         { 
@@ -192,15 +202,16 @@ const Player = ({ station, spotifyToken }) => {
       
       console.log(`✅ Loaded ${response.data.tracks.length} tracks for station`);
       setTracks(response.data.tracks);
-      setCurrentTrackIndex(0); // Reset to first track
+      setCurrentTrackIndex(0);
+      loadedStationIdRef.current = station._id;
       
-      // Don't auto-play - let user click play button or player will auto-start
       setIsPlaying(false);
     } catch (error) {
       console.error('Error loading tracks:', error);
       toast.error('Failed to load tracks');
     } finally {
       setLoading(false);
+      isLoadingTracksRef.current = false;
     }
   };
 
