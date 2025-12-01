@@ -188,11 +188,21 @@ class BumperRequest(BaseModel):
     current_track_artist: Optional[str] = None
     next_track_name: Optional[str] = None
     next_track_artist: Optional[str] = None
+    user_location: Optional[str] = None  # For weather - city name or "auto:ip"
 
 class VoiceInfo(BaseModel):
     voice_id: str
     name: str
     description: Optional[str] = None
+
+# Weather API Route
+@api_router.get("/weather")
+async def get_current_weather(location: str = Query(default="auto:ip")):
+    """Get current weather for a location"""
+    weather = await get_weather(location)
+    if weather:
+        return weather
+    raise HTTPException(status_code=404, detail="Could not fetch weather data")
 
 # Spotify OAuth Routes
 @api_router.get("/spotify/auth")
