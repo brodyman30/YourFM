@@ -283,9 +283,21 @@ const Player = ({ station, spotifyToken }) => {
                 if (state.track_window?.current_track) {
                   const currentUri = state.track_window.current_track.uri;
                   const newIndex = tracks.findIndex(t => t.uri === currentUri);
-                  if (newIndex !== -1 && newIndex !== currentTrackIndex) {
-                    console.log(`🎨 Album art updated to track index ${newIndex}: ${tracks[newIndex]?.name}`);
-                    setCurrentTrackIndex(newIndex);
+                  if (newIndex !== -1) {
+                    if (newIndex !== currentTrackIndex) {
+                      console.log(`🎨 Album art updated to track index ${newIndex}: ${tracks[newIndex]?.name}`);
+                      setCurrentTrackIndex(newIndex);
+                    }
+                  } else {
+                    // If track not found in our list, update by name match as fallback
+                    const trackByName = tracks.findIndex(t => 
+                      t.name === state.track_window.current_track.name && 
+                      t.artist === state.track_window.current_track.artists[0]?.name
+                    );
+                    if (trackByName !== -1 && trackByName !== currentTrackIndex) {
+                      console.log(`🎨 Album art updated by name match to index ${trackByName}`);
+                      setCurrentTrackIndex(trackByName);
+                    }
                   }
                 }
                 
