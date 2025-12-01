@@ -237,8 +237,20 @@ const Player = ({ station, spotifyToken }) => {
         try {
           analyserRef.current.getByteFrequencyData(dataArrayRef.current);
           hasAudioData = dataArrayRef.current.some(val => val > 0);
+          
+          // Log audio data periodically (every 2 seconds)
+          if (Math.floor(time * 10) % 60 === 0) {
+            const avgValue = dataArrayRef.current.reduce((a, b) => a + b, 0) / dataArrayRef.current.length;
+            console.log('🎵 Audio data:', {
+              hasData: hasAudioData,
+              average: avgValue.toFixed(2),
+              max: Math.max(...dataArrayRef.current),
+              sample: Array.from(dataArrayRef.current.slice(0, 10))
+            });
+          }
         } catch (e) {
           hasAudioData = false;
+          console.error('Error getting frequency data:', e);
         }
       }
 
