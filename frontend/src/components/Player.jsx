@@ -19,7 +19,6 @@ const Player = ({ station, spotifyToken }) => {
   const [spotifyPlayer, setSpotifyPlayer] = useState(null);
   const [currentAlbumArt, setCurrentAlbumArt] = useState(null);
   const [currentTrackName, setCurrentTrackName] = useState('');
-  const [audioFeatures, setAudioFeatures] = useState(null);
   const [playerReady, setPlayerReady] = useState(false);
   const canvasRef = useRef(null);
   const audioContextRef = useRef(null);
