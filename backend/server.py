@@ -310,45 +310,77 @@ async def get_tracks(request: dict):
     
     sp = spotipy.Spotify(auth=token_doc['access_token'])
     
-    # Extract artist IDs from the request
+    # Extract artist IDs and names from the request
     artist_ids = [artist['id'] if isinstance(artist, dict) else artist for artist in request.get('artists', [])]
+    artist_names = set()
+    
+    # Get selected artist names for filtering
+    for artist in request.get('artists', []):
+        if isinstance(artist, dict) and 'name' in artist:
+            artist_names.add(artist['name'].lower())
+    
+    # Also fetch names from Spotify if we only have IDs
+    for artist_id in artist_ids[:10]:
+        try:
+            artist_info = sp.artist(artist_id)
+            artist_names.add(artist_info['name'].lower())
+        except:
+            pass
+    
+    logging.info(f"Selected artists: {artist_names}")
     
     # Separate pools for selected artists vs discovery
     selected_artist_tracks = []  # 20% - tracks FROM the selected artists
     discovery_tracks = []  # 80% - tracks from similar/related artists
     seen_uris = set()
+    discovery_artist_names = set()  # Track which new artists we're discovering
     
-    def add_track(track, target_list):
+    def is_selected_artist(track):
+        """Check if track is from a selected artist"""
+        track_artist_name = track['artists'][0]['name'].lower()
+        track_artist_id = track['artists'][0]['id']
+        return track_artist_id in artist_ids or track_artist_name in artist_names
+    
+    def add_track(track, target_list, is_discovery=False):
         """Helper to add track avoiding duplicates"""
         if track['uri'] not in seen_uris:
             seen_uris.add(track['uri'])
-            target_list.append({
+            track_data = {
                 "uri": track['uri'],
                 "name": track['name'],
                 "artist": track['artists'][0]['name'],
+                "artist_id": track['artists'][0]['id'],
                 "album": track['album']['name'],
                 "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
                 "duration_ms": track['duration_ms'],
-                "preview_url": track.get('preview_url')
-            })
+                "preview_url": track.get('preview_url'),
+                "is_discovery": is_discovery
+            }
+            target_list.append(track_data)
+            if is_discovery:
+                discovery_artist_names.add(track['artists'][0]['name'])
     
     # Shuffle artist order for variety each time
     shuffled_artist_ids = artist_ids.copy()
     random.shuffle(shuffled_artist_ids)
     
     # STEP 1: Get tracks FROM selected artists (for the 20% pool)
+    logging.info("STEP 1: Fetching tracks from selected artists...")
     for artist_id in shuffled_artist_ids[:10]:
         try:
             results = sp.artist_top_tracks(artist_id, country='US')
             tracks = results['tracks']
             random.shuffle(tracks)  # Randomize which tracks we pick
             for track in tracks[:5]:  # Up to 5 random tracks per selected artist
-                add_track(track, selected_artist_tracks)
+                add_track(track, selected_artist_tracks, is_discovery=False)
         except Exception as e:
             logging.error(f"Error fetching tracks for artist {artist_id}: {str(e)}")
             continue
     
+    logging.info(f"Got {len(selected_artist_tracks)} tracks from selected artists")
+    
     # STEP 2: Get discovery tracks from RELATED artists (for the 80% pool)
+    logging.info("STEP 2: Fetching tracks from related artists...")
     try:
         for artist_id in shuffled_artist_ids[:10]:
             related = sp.artist_related_artists(artist_id)
@@ -356,8 +388,10 @@ async def get_tracks(request: dict):
             random.shuffle(related_artists)  # Randomize related artists
             
             for related_artist in related_artists[:15]:
-                # Skip if this is one of the selected artists
+                # Skip if this is one of the selected artists (by ID or name)
                 if related_artist['id'] in artist_ids:
+                    continue
+                if related_artist['name'].lower() in artist_names:
                     continue
                     
                 try:
@@ -365,7 +399,9 @@ async def get_tracks(request: dict):
                     tracks = related_tracks['tracks']
                     random.shuffle(tracks)  # Randomize tracks
                     for track in tracks[:6]:  # Random 6 tracks from each related artist
-                        add_track(track, discovery_tracks)
+                        # Double-check it's not from a selected artist
+                        if not is_selected_artist(track):
+                            add_track(track, discovery_tracks, is_discovery=True)
                         if len(discovery_tracks) >= 200:
                             break
                     if len(discovery_tracks) >= 200:
@@ -377,7 +413,10 @@ async def get_tracks(request: dict):
     except Exception as e:
         logging.error(f"Error fetching related artists: {str(e)}")
     
+    logging.info(f"Got {len(discovery_tracks)} tracks from related artists. New artists discovered: {len(discovery_artist_names)}")
+    
     # STEP 3: Get additional discovery from Spotify recommendations
+    logging.info("STEP 3: Fetching recommendations...")
     try:
         if shuffled_artist_ids:
             # Multiple recommendation calls with randomized seeds
@@ -396,10 +435,12 @@ async def get_tracks(request: dict):
                 
                 for track in recommendations['tracks']:
                     # Only add if NOT from selected artists
-                    if track['artists'][0]['id'] not in artist_ids:
-                        add_track(track, discovery_tracks)
+                    if not is_selected_artist(track):
+                        add_track(track, discovery_tracks, is_discovery=True)
     except Exception as e:
         logging.error(f"Error fetching recommendations: {str(e)}")
+    
+    logging.info(f"After recommendations: {len(discovery_tracks)} discovery tracks total")
     
     # STEP 4: Build final playlist with 80/20 split
     # Target 50 tracks: 40 discovery (80%) + 10 selected artists (20%)
@@ -427,7 +468,15 @@ async def get_tracks(request: dict):
     all_tracks = final_discovery + final_selected
     random.shuffle(all_tracks)
     
-    logging.info(f"Track mix: {len(final_discovery)} discovery (80%) + {len(final_selected)} selected artists (20%) = {len(all_tracks)} total")
+    # Log the actual artist distribution
+    final_discovery_artists = set(t['artist'] for t in final_discovery)
+    final_selected_artists = set(t['artist'] for t in final_selected)
+    
+    logging.info(f"=== FINAL TRACK MIX ===")
+    logging.info(f"Discovery: {len(final_discovery)} tracks from {len(final_discovery_artists)} NEW artists")
+    logging.info(f"Selected: {len(final_selected)} tracks from selected artists")
+    logging.info(f"Total: {len(all_tracks)} tracks")
+    logging.info(f"New artists in playlist: {final_discovery_artists}")
     
     return {"tracks": all_tracks}
 
