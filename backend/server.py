@@ -450,6 +450,42 @@ async def get_tracks(request: dict):
     all_target_genres = [g for g in all_target_genres if not (g in seen or seen.add(g))]
     
     logging.info(f"Target genres for discovery: {all_target_genres[:6]}")
+    logging.info(f"Station genres for blocking: {genres}")
+    
+    def verify_artist_genre(artist_id, artist_name):
+        """Verify artist is in compatible genres and not blocked"""
+        if artist_id in verified_artist_cache:
+            return verified_artist_cache[artist_id]
+        
+        try:
+            artist_info = sp.artist(artist_id)
+            artist_genres = artist_info.get('genres', [])
+            
+            # Check if blocked
+            is_blocked, blocked_genre = is_genre_blocked(artist_genres, genres)
+            if is_blocked:
+                logging.info(f"BLOCKED {artist_name} - has blocked genre: {blocked_genre}")
+                verified_artist_cache[artist_id] = False
+                return False
+            
+            # Check for genre overlap with target genres
+            artist_genres_lower = [g.lower() for g in artist_genres]
+            genre_overlap = any(
+                target_g in artist_g or artist_g in target_g 
+                for target_g in all_target_genres[:8] 
+                for artist_g in artist_genres_lower
+            )
+            
+            if not genre_overlap and artist_genres:
+                logging.info(f"Skipping {artist_name} - no genre overlap: {artist_genres}")
+                verified_artist_cache[artist_id] = False
+                return False
+            
+            verified_artist_cache[artist_id] = True
+            return True
+        except:
+            # If we can't verify, allow it (better than blocking everything)
+            return True
     
     try:
         # Strategy 1: Search for artists in the EXACT genres and get their tracks
@@ -468,16 +504,8 @@ async def get_tracks(request: dict):
                     if artist['id'] in artist_ids or artist['name'].lower() in artist_names:
                         continue
                     
-                    # Verify this artist is actually in a matching genre
-                    artist_genres = [g.lower() for g in artist.get('genres', [])]
-                    genre_overlap = any(
-                        target_g in artist_g or artist_g in target_g 
-                        for target_g in all_target_genres[:6] 
-                        for artist_g in artist_genres
-                    )
-                    
-                    if not genre_overlap and artist_genres:
-                        logging.info(f"Skipping {artist['name']} - genres don't match: {artist_genres}")
+                    # Verify genre compatibility
+                    if not verify_artist_genre(artist['id'], artist['name']):
                         continue
                     
                     # Get tracks from this genre-matched artist
@@ -486,6 +514,7 @@ async def get_tracks(request: dict):
                         tracks = artist_tracks['tracks']
                         random.shuffle(tracks)
                         
+                        artist_genres = [g.lower() for g in artist.get('genres', [])]
                         logging.info(f"Adding tracks from {artist['name']} (genres: {artist_genres[:3]})")
                         
                         for track in tracks[:5]:  # Up to 5 tracks per discovered artist
