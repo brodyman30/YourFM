@@ -313,12 +313,12 @@ async def get_tracks(request: dict):
     all_tracks = []
     seed_artist_ids = []
     
-    # Get tracks from selected artists (50% of playlist - more artist-focused)
-    for artist_id in artist_ids[:5]:  # Get from all selected artists
+    # Get tracks from selected artists (get ALL top tracks)
+    for artist_id in artist_ids[:10]:  # Support up to 10 artists
         try:
             results = sp.artist_top_tracks(artist_id, country='US')
             seed_artist_ids.append(artist_id)
-            for track in results['tracks'][:3]:  # Top 3 tracks per artist
+            for track in results['tracks'][:10]:  # Get top 10 per artist instead of 3
                 all_tracks.append({
                     "uri": track['uri'],
                     "name": track['name'],
@@ -332,15 +332,18 @@ async def get_tracks(request: dict):
             logging.error(f"Error fetching tracks for artist {artist_id}: {str(e)}")
             continue
     
-    # Get recommended tracks based on ONLY the selected artists (50% - artist-driven recommendations)
+    # Get multiple batches of recommendations for variety
     try:
         if seed_artist_ids:
-            # Use up to 5 artist seeds (Spotify's max), ignore genre to let artists define the sound
-            recommendations = sp.recommendations(
-                seed_artists=seed_artist_ids[:5],
-                limit=30,
-                country='US'
-            )
+            # Make multiple recommendation calls with different seed combinations
+            for i in range(4):  # 4 batches of recommendations
+                # Rotate through different artist combinations
+                seed_slice = seed_artist_ids[i:i+5] if len(seed_artist_ids) > i else seed_artist_ids[:5]
+                recommendations = sp.recommendations(
+                    seed_artists=seed_slice[:5],
+                    limit=50,  # Max limit per call
+                    country='US'
+                )
             
             for track in recommendations['tracks']:
                 # Avoid duplicates
