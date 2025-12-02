@@ -86,7 +86,7 @@ const LandingPage = ({ onSpotifyLogin }) => {
     <div className="landing-page" data-testid="landing-page">
       <div className="landing-bg"></div>
       <div className="landing-content">
-        {/* Animated Visualizer with Text Overlay */}
+        {/* Animated Visualizer with Stacked Text Logo */}
         <div style={{
           marginBottom: '2rem',
           display: 'flex',
@@ -97,45 +97,63 @@ const LandingPage = ({ onSpotifyLogin }) => {
           <div style={{
             position: 'relative',
             width: '100%',
-            maxWidth: '450px'
+            maxWidth: '550px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
           }}>
+            {/* Canvas for waves - positioned behind */}
             <canvas
               ref={canvasRef}
               style={{
+                position: 'absolute',
                 width: '100%',
-                height: '180px',
-                borderRadius: '24px',
-                background: 'rgba(0, 0, 0, 0.4)',
-                boxShadow: '0 0 60px rgba(139, 92, 246, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.6)',
-                border: '2px solid rgba(139, 92, 246, 0.3)'
+                height: '200px',
+                zIndex: 1
               }}
             />
-            {/* Text Overlay */}
-            <h1 
-              className="landing-title" 
-              data-testid="landing-title"
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                margin: 0,
-                fontSize: '4rem',
+            
+            {/* Circular Logo Emblem */}
+            <div style={{
+              position: 'relative',
+              zIndex: 10,
+              width: '180px',
+              height: '180px',
+              borderRadius: '50%',
+              background: 'linear-gradient(180deg, #1a1033 0%, #2d1f4e 100%)',
+              border: '6px solid #FBBF24',
+              boxShadow: '0 0 40px rgba(251, 191, 36, 0.4), 0 0 80px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: '20px'
+            }}>
+              {/* YOUR text - smaller */}
+              <span style={{
                 fontFamily: '"aviano-future", sans-serif',
+                fontSize: '1.4rem',
                 fontWeight: 700,
-                fontStyle: 'normal',
-                background: 'linear-gradient(135deg, #FFFFFF 0%, #FBBF24 50%, #8B5CF6 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                textShadow: 'none',
-                letterSpacing: '0.15em',
-                zIndex: 10,
-                filter: 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.5)) drop-shadow(0 0 40px rgba(139, 92, 246, 0.3))'
-              }}
-            >
-              YOURFM
-            </h1>
+                color: '#FBBF24',
+                letterSpacing: '0.2em',
+                textShadow: '0 0 10px rgba(251, 191, 36, 0.6)',
+                marginBottom: '-5px'
+              }}>
+                YOUR
+              </span>
+              {/* FM text - larger */}
+              <span style={{
+                fontFamily: '"aviano-future", sans-serif',
+                fontSize: '4rem',
+                fontWeight: 700,
+                color: '#FBBF24',
+                letterSpacing: '0.1em',
+                textShadow: '0 0 20px rgba(251, 191, 36, 0.8), 0 0 40px rgba(251, 191, 36, 0.4)',
+                lineHeight: 1
+              }}>
+                FM
+              </span>
+            </div>
           </div>
         </div>
         <p className="landing-subtitle" data-testid="landing-subtitle">
