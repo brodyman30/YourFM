@@ -673,10 +673,10 @@ async def delete_station(station_id: str):
 
 # Concert Data Routes (Bandsintown)
 @api_router.get("/concerts/{artist_name}")
-async def get_concerts(artist_name: str):
-    """Get upcoming concerts for an artist"""
-    concerts = await get_artist_concerts(artist_name)
-    return {"artist": artist_name, "concerts": concerts}
+async def get_concerts(artist_name: str, lat: float = None, lon: float = None, radius: int = 150):
+    """Get upcoming nearby concerts for an artist within specified radius"""
+    concert = await get_nearby_concerts(artist_name, lat=lat, lon=lon, radius_miles=radius)
+    return {"artist": artist_name, "concert": concert}
 
 # ElevenLabs Voice Routes
 @api_router.get("/elevenlabs/voices")
