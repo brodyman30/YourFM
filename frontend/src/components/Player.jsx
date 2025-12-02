@@ -351,8 +351,8 @@ const Player = ({ station, spotifyToken }) => {
       // Use provided track info or current track
       const trackToReference = trackInfo || currentTrack;
       
-      console.log('Generating bumper for track:', trackToReference);
-      console.log('Next track:', nextTrackInfo);
+      console.log('🎙️ Generating bumper for track:', trackToReference?.name, 'by', trackToReference?.artist);
+      console.log('🎙️ Next track will be:', nextTrackInfo?.name, 'by', nextTrackInfo?.artist);
       console.log('Station topics:', station.bumper_topics);
       
       // Get user location (from cache set when "local weather" was selected, or fallback to IP)
