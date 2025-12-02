@@ -86,42 +86,55 @@ const LandingPage = ({ onSpotifyLogin }) => {
     <div className="landing-page" data-testid="landing-page">
       <div className="landing-bg"></div>
       <div className="landing-content">
-        {/* Animated Visualizer as Logo */}
+        {/* Animated Visualizer with Text Overlay */}
         <div style={{
-          marginBottom: '1.5rem',
+          marginBottom: '2rem',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center'
+          alignItems: 'center',
+          position: 'relative'
         }}>
-          <canvas
-            ref={canvasRef}
-            style={{
-              width: '100%',
-              maxWidth: '400px',
-              height: '150px',
-              borderRadius: '20px',
-              background: 'rgba(0, 0, 0, 0.3)',
-              boxShadow: '0 0 40px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)',
-              border: '2px solid rgba(139, 92, 246, 0.3)'
-            }}
-          />
-          <h1 
-            className="landing-title" 
-            data-testid="landing-title"
-            style={{
-              marginTop: '1rem',
-              fontSize: '3.5rem',
-              background: 'linear-gradient(135deg, #8B5CF6 0%, #FBBF24 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              textShadow: 'none',
-              fontWeight: '900',
-              letterSpacing: '0.1em'
-            }}
-          >
-            YOURFM
-          </h1>
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: '450px'
+          }}>
+            <canvas
+              ref={canvasRef}
+              style={{
+                width: '100%',
+                height: '180px',
+                borderRadius: '24px',
+                background: 'rgba(0, 0, 0, 0.4)',
+                boxShadow: '0 0 60px rgba(139, 92, 246, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.6)',
+                border: '2px solid rgba(139, 92, 246, 0.3)'
+              }}
+            />
+            {/* Text Overlay */}
+            <h1 
+              className="landing-title" 
+              data-testid="landing-title"
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                margin: 0,
+                fontSize: '4rem',
+                background: 'linear-gradient(135deg, #FFFFFF 0%, #FBBF24 50%, #8B5CF6 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textShadow: 'none',
+                fontWeight: '900',
+                letterSpacing: '0.15em',
+                zIndex: 10,
+                filter: 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.5)) drop-shadow(0 0 40px rgba(139, 92, 246, 0.3))'
+              }}
+            >
+              YOURFM
+            </h1>
+          </div>
         </div>
         <p className="landing-subtitle" data-testid="landing-subtitle">
           Create your personalized radio station with AI-powered bumpers,
