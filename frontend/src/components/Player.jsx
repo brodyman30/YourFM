@@ -511,7 +511,7 @@ const Player = ({ station, spotifyToken }) => {
       <div className="player-controls">
 
         {/* Playback info - controls handled by Spotify player below */}
-        <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: '0.9rem', marginTop: '1rem' }}>
+        <div style={{ textAlign: 'center', color: '#FBBF24', fontSize: '0.9rem', marginTop: '1rem' }}>
           {playingBumper ? 'Bumper playing...' : 'Use the player controls below to play, pause, and skip tracks'}
         </div>
 
