@@ -561,60 +561,7 @@ async def get_tracks(request: dict):
 
 
 # Station Management Routes
-                
-                if len(discovery_tracks) >= 200:
-                    break
-            except Exception as e:
-                continue
-    except Exception as e:
-        logging.error(f"Error finding collaborators: {str(e)}")
-    
-    logging.info(f"After all discovery: {len(discovery_tracks)} discovery tracks total")
-    
-    # STEP 4: Build final playlist with 80/20 split
-    # Target 50 tracks: 40 discovery (80%) + 10 selected artists (20%)
-    target_total = 50
-    target_discovery = int(target_total * 0.80)  # 40 tracks
-    target_selected = target_total - target_discovery  # 10 tracks
-    
-    # Shuffle both pools completely
-    random.shuffle(discovery_tracks)
-    random.shuffle(selected_artist_tracks)
-    
-    # Pick tracks maintaining the ratio
-    final_discovery = discovery_tracks[:target_discovery]
-    final_selected = selected_artist_tracks[:target_selected]
-    
-    # If we don't have enough of one type, fill with the other
-    if len(final_discovery) < target_discovery:
-        extra_needed = target_discovery - len(final_discovery)
-        final_selected = selected_artist_tracks[:target_selected + extra_needed]
-    elif len(final_selected) < target_selected:
-        extra_needed = target_selected - len(final_selected)
-        final_discovery = discovery_tracks[:target_discovery + extra_needed]
-    
-    # IMPORTANT: Interleave selected artists throughout the playlist
-    # Instead of just shuffling together, ensure selected artists appear regularly
-    all_tracks = []
-    discovery_idx = 0
-    selected_idx = 0
-    
-    # Pattern: 4 discovery tracks, then 1 selected artist track (maintains 80/20)
-    while discovery_idx < len(final_discovery) or selected_idx < len(final_selected):
-        # Add up to 4 discovery tracks
-        for _ in range(4):
-            if discovery_idx < len(final_discovery):
-                all_tracks.append(final_discovery[discovery_idx])
-                discovery_idx += 1
-        
-        # Add 1 selected artist track
-        if selected_idx < len(final_selected):
-            all_tracks.append(final_selected[selected_idx])
-            selected_idx += 1
-    
-    # Log the actual artist distribution
-    final_discovery_artists = set(t['artist'] for t in final_discovery)
-    final_selected_artists = set(t['artist'] for t in final_selected)
+@api_router.get("/stations", response_model=List[Station])
     
     logging.info(f"=== FINAL TRACK MIX ===")
     logging.info(f"Discovery: {len(final_discovery)} tracks from {len(final_discovery_artists)} NEW artists")
