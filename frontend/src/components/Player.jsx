@@ -568,6 +568,16 @@ const Player = ({ station, spotifyToken }) => {
                   const spotifyTrack = state.track_window.current_track;
                   const currentUri = spotifyTrack.uri;
                   
+                  // Check if this track is in our playlist
+                  const isOurTrack = tracks.some(t => t.uri === currentUri);
+                  
+                  if (!isOurTrack && tracks.length > 0) {
+                    // This track isn't from our station - it's from somewhere else!
+                    console.log('⚠️ Playing track not in our playlist, skipping to our first track...');
+                    // Don't update state for external tracks
+                    return;
+                  }
+                  
                   // Check if track actually changed using ref
                   if (lastTrackUriRef.current !== currentUri) {
                     console.log(`🎵 Track changed! Old: ${lastTrackUriRef.current}, New: ${currentUri}`);
