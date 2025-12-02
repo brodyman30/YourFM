@@ -519,16 +519,34 @@ const Player = ({ station, spotifyToken }) => {
         <div style={{ marginTop: '2rem', visibility: playingBumper ? 'hidden' : 'visible' }} data-testid="spotify-player-container">
           {spotifyToken && tracks.length > 0 && currentTrack && (
             <SpotifyPlayer
-              key={station._id}
+              key={`${station.id}-${tracks[0]?.uri}`}
               token={spotifyToken}
               uris={tracks.map(t => t.uri)}
               play={isPlaying}
               initialVolume={100}
+              syncExternalDevice={false}
               getPlayer={(player) => {
                 if (player && !spotifyPlayer) {
                   console.log('✓ Spotify player instance captured');
                   setSpotifyPlayer(player);
                   setPlayerReady(true);
+                  
+                  // Force transfer playback to this device when ready
+                  player.addListener('ready', async ({ device_id }) => {
+                    console.log('🎧 Spotify device ready:', device_id);
+                    
+                    // Transfer playback to this device
+                    try {
+                      await axios.put(
+                        'https://api.spotify.com/v1/me/player',
+                        { device_ids: [device_id], play: false },
+                        { headers: { 'Authorization': `Bearer ${spotifyToken}` } }
+                      );
+                      console.log('✅ Playback transferred to this device');
+                    } catch (transferError) {
+                      console.log('Note: Transfer playback attempt:', transferError.message);
+                    }
+                  });
                   
                   // Try to connect audio visualizer to Spotify player
                   if (player._player) {
