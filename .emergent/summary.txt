@@ -1,0 +1,586 @@
+<analysis>original_problem_statement:
+The initial request was to review a completed application, **YOURFM**, a personalized radio app featuring AI-powered DJ bumpers, smart playlists, and professional audio mixing using Spotify, Gemini, and ElevenLabs.
+
+The user then provided a series of feature requests and bug reports:
+1.  **Bug:** The Connect with Spotify button was not working.
+2.  **Feature:** Randomize songs every time a station loads.
+3.  **Feature:** Change the track mix to 80% new/discovery artists and 20% selected artists.
+4.  **Bug:** Song discovery was not working and only playing selected artists. This was due to a Spotify API deprecation.
+5.  **Bug:** Song discovery was too broad and included out-of-genre songs.
+6.  **Feature:** Refine bumper categories and implement real-time updates like concert dates and weather.
+7.  **Bug:** The app was using the server's IP for weather data, not the user's location.
+8.  **Feature:** Only ask for location permission when a feature that needs it (weather/concerts) is selected.
+9.  **Bug:** The app was experiencing very long load times and sometimes wouldn't load at all. This was due to Spotify API rate limiting.
+10. **Bug:** Voices from ElevenLabs were not loading in the station creator.
+11. **Feature:** Limit how often weather bumpers are played.
+12. **Bug:** Playback on another device interfered with the app's player.
+13. **Feature:** Redesign the landing page to replace the logo with an animated visualizer.
+14. **Feature:** Change the landing page title font to Aviano Future.
+15. **Feature:** Redesign the landing page logo to match a user-provided image (stacked YOUR over FM in a circular emblem).
+
+**User's preferred language**: English
+
+**what currently exists?**
+A fully-functional YOURFM web application. The stack is React, FastAPI, and MongoDB. The app integrates with Spotify (for music playback and data), ElevenLabs (for AI voices), Google Gemini (for AI DJ bumper script generation via Emergent LLM Key), WeatherAPI (for weather data in bumpers), and SeatGeek (for nearby concert data in bumpers). Users can create stations based on artists and genres, and the app generates a playlist with a mix of selected artists and discovered artists. It features AI-generated DJ bumpers with dynamic content like weather and concerts. The landing page has been customized with a new font and an animated logo based on the user's design.
+
+**Last working item**:
+- Last item agent was working: The agent was redesigning the landing page logo to match a user-provided design. This involved stacking the text YOUR over a larger FM, placing it inside a circular emblem, using the Aviano Future font, and incorporating the animated sound wave visualizer in the background.
+- Status: USER VERIFICATION PENDING
+- Agent Testing Done: Y (The agent took a screenshot to confirm the visual changes.)
+- Which testing method agent to use? screenshot tool
+- User Testing Done: N
+
+**All Pending/In progress Issue list**:
+- **Issue 1: (P0) Application loading time and performance.**
+  - Description: The user reported multiple times that the application was loading very slowly or not at all. This was traced back to severe Spotify API rate-limiting, which caused the backend to hang. Although the API call logic was heavily optimized (from 100+ calls to ~10 per load) and new Spotify credentials were provided, the user has not confirmed if the performance is now acceptable.
+  - Attempted fixes:
+    - Replaced deprecated Spotify API endpoints (, ) with the  API.
+    - Heavily optimized the track discovery logic in  to drastically reduce the number of API calls.
+    - User provided new Spotify API credentials to reset the rate limit.
+    - Cleared cached Spotify tokens from the MongoDB database ().
+    - Restarted all services.
+  - Next debug checklist:
+    1. Ask the user to test loading a station and confirm if the speed is now acceptable.
+    2. If it's still slow, check the backend logs (==> /var/log/supervisor/backend.err.log <==
+2025-12-02 02:28:11,450 - root - INFO - Found nearby concert for Journey: T-Mobile Center in Kansas City, MO on March 26
+2025-12-02 02:28:11,451 - root - INFO - Found nearby concert: REAL CONCERT INFO: Journey is playing at T-Mobile Center in Kansas City, MO on March 26! 
+2025-12-02 02:28:11,451 - root - INFO - Prompt sent to AI: REAL CONCERT INFO: Journey is playing at T-Mobile Center in Kansas City, MO on March 26! You just played 'Open Arms (2022 Remaster)' by Journey. Work in the real-time info naturally, then announce 'Be Quiet and Drive (Far Away)' by Deftones is up next. End with 'on your F M, your rock and pop and electronic station!'
+[92m02:28:11 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:28:11,451 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:28:12 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:28:12,482 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:28:12,482 - root - INFO - AI response: That was Journey with 'Open Arms', remastered and still giving us all the feels! Did you know keyboardist Jonathan Cain didn't originally want that song on Escape? Glad they changed their minds! Catch them live at T-Mobile Center in Kansas City, MO on March 26! Coming up next, we've got Deftones with 'Be Quiet and Drive (Far Away)' here late night on your F M, your rock and pop and electronic station!
+
+2025-12-02 02:29:08,673 - root - INFO - Found nearby concert for Bad Omens: Kia Forum in Inglewood, CA on March 26
+2025-12-02 02:29:08,890 - root - INFO - No nearby concerts found for Bring Me The Horizon within 150 miles
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2590]
+INFO:     Started server process [2736]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2025-12-02 02:29:38,640 - root - INFO - Selected artists: {'sabrina carpenter', 'chappell roan', 'taylor swift'}
+2025-12-02 02:29:38,640 - root - INFO - STEP 1: Fetching tracks from selected artists...
+2025-12-02 02:29:39,124 - root - INFO - Got 12 tracks from selected artists
+2025-12-02 02:29:39,125 - root - INFO - STEP 2: Fetching discovery tracks...
+2025-12-02 02:29:39,739 - root - INFO - Got 30 discovery tracks
+2025-12-02 02:29:39,739 - root - INFO - === FINAL: 40 tracks ===
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2736]
+INFO:     Stopping reloader process [2588]
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [2748] using WatchFiles
+INFO:     Started server process [2750]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2025-12-02 02:29:45,564 - root - INFO - Selected artists: {'taylor swift', 'sabrina carpenter', 'chappell roan'}
+2025-12-02 02:29:45,564 - root - INFO - STEP 1: Fetching tracks from selected artists...
+2025-12-02 02:29:45,959 - root - INFO - Got 12 tracks from selected artists
+2025-12-02 02:29:45,960 - root - INFO - STEP 2: Fetching discovery tracks...
+2025-12-02 02:29:46,516 - root - INFO - Got 30 discovery tracks
+2025-12-02 02:29:46,516 - root - INFO - === FINAL: 40 tracks ===
+2025-12-02 02:29:46,791 - root - INFO - Found nearby concert for Bad Omens: Kia Forum in Inglewood, CA on March 26
+2025-12-02 02:29:53,173 - root - INFO - Bumper request - Track: 'How It’s Done' by HUNTR/X, Topics: ['concert tours']
+2025-12-02 02:29:53,348 - root - INFO - No nearby concerts found for HUNTR/X within 150 miles
+2025-12-02 02:29:53,348 - root - INFO - Prompt sent to AI: You just played 'How It’s Done' by HUNTR/X. Share a unique interesting fact about: concert tours for HUNTR/X. Then mention 'What It Sounds Like' by HUNTR/X is coming up next. End with 'on your F M, your pop station!' or similar.
+[92m02:29:53 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:29:53,354 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:29:54 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:29:54,420 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:29:54,422 - root - INFO - AI response: That was HUNTR/X with 'How It's Done'! Did you know HUNTR/X actually plans their concert setlists based on fan voting online? Pretty cool! Coming up next, it's 'What It Sounds Like,' also by HUNTR/X, here on your F M, your pop station!
+
+2025-12-02 02:30:20,409 - root - INFO - Bumper request - Track: 'Espresso' by Sabrina Carpenter, Topics: ['concert tours']
+2025-12-02 02:30:20,659 - root - INFO - No nearby concerts found for Sabrina Carpenter within 150 miles
+2025-12-02 02:30:20,659 - root - INFO - Prompt sent to AI: You just played 'Espresso' by Sabrina Carpenter. Share a unique interesting fact about: concert tours for Sabrina Carpenter. Then mention 'FEAR' by NF is coming up next. End with 'on your F M, your pop station!' or similar.
+[92m02:30:20 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:30:20,660 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:30:21 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:30:21,600 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:30:21,601 - root - INFO - AI response: That was Sabrina Carpenter with 'Espresso'! Did you know Sabrina's 'Emails I Can't Send Tour' had over 80 dates?
+
+Coming up next, it's NF with 'FEAR'. Stay tuned late night, on your F M, your pop station!
+
+2025-12-02 02:31:10,038 - root - INFO - Selected artists: {'bring me the horizon', 'bad omens'}
+2025-12-02 02:31:10,038 - root - INFO - STEP 1: Fetching tracks from selected artists...
+2025-12-02 02:31:10,447 - root - INFO - Got 8 tracks from selected artists
+2025-12-02 02:31:10,447 - root - INFO - STEP 2: Fetching discovery tracks...
+2025-12-02 02:31:10,972 - root - INFO - Got 40 discovery tracks
+2025-12-02 02:31:10,972 - root - INFO - === FINAL: 48 tracks ===
+2025-12-02 02:31:15,937 - root - INFO - Selected artists: {'bring me the horizon', 'bad omens'}
+2025-12-02 02:31:15,937 - root - INFO - STEP 1: Fetching tracks from selected artists...
+2025-12-02 02:31:16,231 - root - INFO - Got 8 tracks from selected artists
+2025-12-02 02:31:16,231 - root - INFO - STEP 2: Fetching discovery tracks...
+2025-12-02 02:31:16,726 - root - INFO - Got 40 discovery tracks
+2025-12-02 02:31:16,726 - root - INFO - === FINAL: 48 tracks ===
+2025-12-02 02:31:21,107 - root - INFO - Bumper request - Track: 'Man in the Box' by Alice In Chains, Topics: ['concert tours']
+2025-12-02 02:31:21,303 - root - INFO - No nearby concerts found for Alice In Chains within 150 miles
+2025-12-02 02:31:21,303 - root - INFO - Prompt sent to AI: You just played 'Man in the Box' by Alice In Chains. Share a unique interesting fact about: concert tours for Alice In Chains. Then mention 'In the End' by Linkin Park is coming up next. End with 'on your F M, your rock and metal station!' or similar.
+[92m02:31:21 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:31:21,304 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:31:22 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:31:22,356 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:31:22,356 - root - INFO - AI response: That was Alice In Chains with 'Man in the Box' - did you know they co-headlined a tour with KISS back in '96? Talk about a clash of titans! Coming up next, it's Linkin Park with 'In the End', here on your F M, your rock and metal station!
+
+2025-12-02 02:31:43,638 - root - INFO - Bumper request - Track: 'Impose' by Bad Omens, Topics: ['concert tours']
+2025-12-02 02:31:43,861 - root - INFO - Found nearby concert for Bad Omens: T-Mobile Center in Kansas City, MO on February 26
+2025-12-02 02:31:43,861 - root - INFO - Found nearby concert: REAL CONCERT INFO: Bad Omens is playing at T-Mobile Center in Kansas City, MO on February 26! 
+2025-12-02 02:31:43,861 - root - INFO - Prompt sent to AI: REAL CONCERT INFO: Bad Omens is playing at T-Mobile Center in Kansas City, MO on February 26! You just played 'Impose' by Bad Omens. Work in the real-time info naturally, then announce 'Thunderstruck' by AC/DC is up next. End with 'on your F M, your rock and metal station!'
+[92m02:31:43 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:31:43,862 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:31:44 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:31:44,658 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:31:44,658 - root - INFO - AI response: That was 'Impose' by Bad Omens! Shoutout to Bad Omens, catch them live at T-Mobile Center in Kansas City on February 26th! Coming up next, we've got a classic! AC/DC and 'Thunderstruck' is next, here on your F M, your rock and metal station!
+
+2025-12-02 02:32:03,842 - root - INFO - Bumper request - Track: 'Come As You Are' by Nirvana, Topics: ['concert tours']
+2025-12-02 02:32:04,546 - root - INFO - Found nearby concert for Nirvana: The Cotillion in Wichita, KS on January 16
+2025-12-02 02:32:04,546 - root - INFO - Found nearby concert: REAL CONCERT INFO: Nirvana is playing at The Cotillion in Wichita, KS on January 16! 
+2025-12-02 02:32:04,546 - root - INFO - Prompt sent to AI: REAL CONCERT INFO: Nirvana is playing at The Cotillion in Wichita, KS on January 16! You just played 'Come As You Are' by Nirvana. Work in the real-time info naturally, then announce 'Iris' by The Goo Goo Dolls is up next. End with 'on your F M, your rock and metal station!'
+[92m02:32:04 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:32:04,547 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:32:05 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:32:05,506 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:32:05,507 - root - INFO - AI response: That was Nirvana with "Come As You Are!" Did you know that the song's iconic opening riff was inspired by a song by The Mission? And speaking of Nirvana, catch them live at The Cotillion in Wichita on January 16! Coming up next, it's The Goo Goo Dolls with "Iris" on your F M, your rock and metal station!
+
+2025-12-02 02:32:15,859 - root - INFO - Bumper request - Track: 'Sweet Child O' Mine' by Guns N' Roses, Topics: ['concert tours']
+2025-12-02 02:32:16,101 - root - INFO - Found nearby concert for Guns N' Roses: Morton Amphitheater in Riverside, MO on August 19
+2025-12-02 02:32:16,101 - root - INFO - Found nearby concert: REAL CONCERT INFO: Guns N' Roses is playing at Morton Amphitheater in Riverside, MO on August 19! 
+2025-12-02 02:32:16,101 - root - INFO - Prompt sent to AI: REAL CONCERT INFO: Guns N' Roses is playing at Morton Amphitheater in Riverside, MO on August 19! You just played 'Sweet Child O' Mine' by Guns N' Roses. Work in the real-time info naturally, then announce 'Change (In the House of Flies)' by Deftones is up next. End with 'on your F M, your rock and metal station!'
+[92m02:32:16 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:32:16,102 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:32:16 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:32:16,999 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:32:16,999 - root - INFO - AI response: That was Guns N' Roses with 'Sweet Child O' Mine!' Axl and the boys are playing the Morton Amphitheater in Riverside on August 19th - don't miss that! Coming up next, it's the Deftones with 'Change (In the House of Flies)'... on your F M, your rock and metal station!
+
+2025-12-02 02:32:37,960 - root - INFO - Bumper request - Track: 'Somewhere I Belong' by Linkin Park, Topics: ['concert tours']
+2025-12-02 02:32:38,166 - root - INFO - No nearby concerts found for Linkin Park within 150 miles
+2025-12-02 02:32:38,166 - root - INFO - Prompt sent to AI: You just played 'Somewhere I Belong' by Linkin Park. Share a unique interesting fact about: concert tours for Linkin Park. Then mention 'maybe (feat. Bring Me The Horizon)' by mgk is coming up next. End with 'on your F M, your rock and metal station!' or similar.
+[92m02:32:38 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:32:38,167 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:32:39 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:32:39,159 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:32:39,160 - root - INFO - AI response: That was Linkin Park with 'Somewhere I Belong'! Did you know, Linkin Park's 'Projekt Revolution' tour was conceived by the band as an alternative to the more mainstream tours at the time!
+
+Coming up next, it's mgk with 'maybe (feat. Bring Me The Horizon)'. All that and more, here on your F M, your rock and metal station!
+
+2025-12-02 02:32:50,224 - root - INFO - Bumper request - Track: 'Like a Stone' by Audioslave, Topics: ['concert tours']
+2025-12-02 02:32:50,382 - root - INFO - No nearby concerts found for Audioslave within 150 miles
+2025-12-02 02:32:50,383 - root - INFO - Prompt sent to AI: You just played 'Like a Stone' by Audioslave. Share a unique interesting fact about: concert tours for Audioslave. Then mention 'Drops of Jupiter (Tell Me)' by Train is coming up next. End with 'on your F M, your rock and metal station!' or similar.
+[92m02:32:50 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:32:50,383 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:32:51 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:32:51,641 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:32:51,641 - root - INFO - AI response: That was Audioslave with 'Like a Stone'! Did you know that their 2005 tour was cut short because Chris Cornell had vocal problems? Crazy! Coming up next, it's Train with 'Drops of Jupiter (Tell Me)'. All night long, here on your F M, your rock and metal station!
+
+2025-12-02 02:33:14,846 - root - INFO - Bumper request - Track: 'Teardrops' by Bring Me The Horizon, Topics: ['concert tours']
+2025-12-02 02:33:15,087 - root - INFO - Found nearby concert for Bring Me The Horizon: T-Mobile Center in Kansas City, MO on May 12
+2025-12-02 02:33:15,088 - root - INFO - Found nearby concert: REAL CONCERT INFO: Bring Me The Horizon is playing at T-Mobile Center in Kansas City, MO on May 12! 
+2025-12-02 02:33:15,088 - root - INFO - Prompt sent to AI: REAL CONCERT INFO: Bring Me The Horizon is playing at T-Mobile Center in Kansas City, MO on May 12! You just played 'Teardrops' by Bring Me The Horizon. Work in the real-time info naturally, then announce 'Can't Stop' by Red Hot Chili Peppers is up next. End with 'on your F M, your rock and metal station!'
+[92m02:33:15 - LiteLLM:INFO[0m: utils.py:3427 - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+2025-12-02 02:33:15,088 - LiteLLM - INFO - 
+LiteLLM completion() model= gemini/gemini-2.0-flash; provider = openai
+[92m02:33:16 - LiteLLM:INFO[0m: utils.py:1307 - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:33:16,033 - LiteLLM - INFO - Wrapper: Completed Call, calling success_handler
+2025-12-02 02:33:16,034 - root - INFO - AI response: That was 'Teardrops' by Bring Me The Horizon! And get ready, KC, because they're hitting up T-Mobile Center on May 12th! Coming up next, we've got Red Hot Chili Peppers with 'Can't Stop', here on your F M, your rock and metal station!
+
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2750]
+INFO:     Started server process [2804]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2804]
+INFO:     Started server process [2819]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2819]
+INFO:     Stopping reloader process [2748]
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [2839] using WatchFiles
+INFO:     Started server process [2841]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [30] using WatchFiles
+INFO:     Started server process [67]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [29] using WatchFiles
+
+==> /var/log/supervisor/backend.out.log <==
+INFO:     10.64.141.231:40344 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.143.135:60614 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:42998 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:54520 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.143.135:45800 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.143.136:48502 - "GET /api/spotify/callback?code=AQCMBGNvLgDB8VQUqgCqj3cZxcksMa9K_tq7UiiEdlAsTJCjDRWd96waAHBYCnyuzuC9n1QKxjv6dPCPKusLL66FxL293zlUVIa5mJEpFvsEX05V6-4X1mdduMoP90UKSw0SZINXy8_jvZSh9-IDMu6vgdvwOefz6pvctkI1hzVwdB7BgufVVXCMMudhgQ2tBjJc_-WKMp7ukd2zXbc4VZ2g_4tLJXBmdI_4PhYhjVeVNHsfAf9IDDVHGqREMXlNRnrrbrjVXnI-Zp02YM8xJLSc3yYNbWSR2F6aRnviRlNwpLNbudwMREGqb43aTA_hijRTfV2hz_VwCY5nc4iuL5079SpescOXiM_Te4vnxnSk HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.143.135:45800 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.143.155:39692 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.130.249:53394 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.143.155:39700 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.141.231:46384 - "GET /api/spotify/callback?code=AQCD8IOCXhXUfls5lYqCp3TgF2lGNcaGeFVoN29ERMGCDcHB5FEWQaBSFn0iXMOX3h3W59aIR43zdZ1qsWzZz1ZsrMNScg89Mt0Kw9Jn18ilAIE-MELrWklMVmtjrvgpPbEAwEtOw2QSoX7jpQApGEF7rlXr-gL1Kwh8chbSIL_off_5ACfJZVhRfSjLgdWTHzQMpS6CkCEJLxjdZGTpYTlIflPnMXhtP66vRnRHrF8HlxBHN444Kr-oUG2YVdVkZMEtT6f0yQW2CLfFwJSxy7KeQMzQcR5DXv6-Khk55_Ge1CXygsVuK6gjDzi0BvGazH0MYoA9vJkGhXYQgUya-RlrKtcGhblueBrlx3UOp3FY HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.143.155:39700 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.130.249:53410 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.130.249:53410 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.130.228:33492 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.143.136:48506 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,electronic HTTP/1.1" 200 OK
+INFO:     10.64.130.228:33492 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.130.228:33506 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.231:46170 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,electronic HTTP/1.1" 200 OK
+INFO:     10.64.141.231:60328 - "POST /api/spotify/search/artists?query=wind%20walkers HTTP/1.1" 200 OK
+INFO:     10.64.143.135:41680 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b HTTP/1.1" 200 OK
+INFO:     10.64.141.231:60328 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.231:41418 - "POST /api/spotify/search/artists?query=bad%20omens HTTP/1.1" 200 OK
+INFO:     10.64.143.155:44118 - "PUT /api/stations/46f41f46-7cc5-45a9-a827-e1e86c5a5848 HTTP/1.1" 200 OK
+INFO:     10.64.130.249:60064 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53482 - "GET /api/concerts/Bad%20Omens?lat=34.0522&lon=-118.2437&radius=150 HTTP/1.1" 200 OK
+INFO:     10.64.130.249:53628 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.249:41886 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.130.249:41886 - "GET /api/spotify/callback?code=AQBbnWmbf3AhG4IJ7sY93umPUzTEPAptuZkZ_nLYfl3LkZN567HDDCjtsPtGL-eKqi73tMNIIye97p7mu8xs9Fs5YXLsB1hd8EijF_sx08PM_H9Fsr-UUjF1_FJPsw3mVFlMEvCJWrsF3P-2c_ImljCqerPP2symJtMzky9059b3b8io52do2c5fpPQK4ZN8Xsj0ukFlNwmq6S20xaglE90zcp3gelj-QcMrH3hDg6ctpOYpx34-QM3Stz5_yqXVQDq9OKHgjX0a8CxJhOIv7q3vwQSWW1QuFBYYmEzJfepsIQjw3BQEfE37kj15YPuce-AMODTKcC6-d2C6q8CkZtSFIZqaZm5EVthSB05pFszs HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.141.231:53696 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.130.249:41886 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.141.231:53696 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.143.135:37026 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.143.155:40222 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.231:53696 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.231:53706 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.143.135:37026 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.231:38584 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.130.249:48742 - "GET /api/spotify/callback?code=AQCiiAnKZuVd0pFRk0uTlW1kvhmron1NYH6Re6QY0SSA7LcIgPYO_s7BcfswSnqtQRlktLGAfgoqftpTzKFJjVpokWnkHG9S8NUF5PnQuVFJ3saoJFJo48VexMmTbaoJvfYsByFmQmE4n7mhoqKvGj6PirDhKfay7N4m8OHdQi8J5KwZM3YjH9K6cGFBT-HG2m0z5GtJceGRBMrVJTGYQTAcYXyIMsln96yLCr0qki-LMikKFpGJVyMnB8GHo1ZMJIleF60B8bdOuhFgYDovcFdLEKIetFSQNnEmQytKfnqW16XHYnHu002oU87aOOu_TX7_okhgnu06mfFWH2mUwgDQ8_tZmj7TiIdoKOJ4k_gq HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.130.249:48742 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.141.231:38584 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.143.135:52942 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.143.136:55300 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.143.135:52958 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.231:50510 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.143.155:39524 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.231:50510 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.143.135:38180 - "PUT /api/stations/46f41f46-7cc5-45a9-a827-e1e86c5a5848 HTTP/1.1" 200 OK
+INFO:     10.64.141.240:43570 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.131.139:48064 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.231:50246 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.239:43498 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.231:50254 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.239:43498 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.240:43580 - "PUT /api/stations/46f41f46-7cc5-45a9-a827-e1e86c5a5848 HTTP/1.1" 200 OK
+INFO:     10.64.141.231:50258 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.141.239:46898 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.231:50120 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.141.240:44930 - "GET /api/spotify/callback?code=AQDeTT58nSUd1eiTqhTB3YgB5SGiI7SMzd1Z31TfWuNia59Fa09_1AvNmeikXqLSuvK9lSl8OIyIKKwHVJ7Xjvj1mRgcgK4CbCLovwepUk6acUiUE0dexVCyF3xdrrxmYslkXGJZaoLDeTPmO9eTam0KTBEMHRCtUaiM4rO0KZTQYf7zxIXZAGoACYVPoWaakkZjca-wtPtH8Vxk3vVvAdgMmJRs66kL3P_SGHlmExqpaz7bnDvO5WNOLElbkLSy9ykLyceyEHNh5_r88m8q2-BRm-SrY44WIoOtuCFEdzvTy0IcTNB_zZwDarB1KCHaSd47JV5fZIa7c9tVh-Sx4zAP6sKe96SssMcxaDBTQO_9 HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.141.239:51688 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.130.228:49238 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.141.239:51688 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.130.249:40984 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.130.249:40992 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.239:51688 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.130.228:49238 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.240:44946 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.131.139:33130 - "PUT /api/stations/46f41f46-7cc5-45a9-a827-e1e86c5a5848 HTTP/1.1" 200 OK
+INFO:     10.64.141.239:51688 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.131.139:33130 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.239:43170 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.240:44946 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.231:32778 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.130.228:42406 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.130.249:33626 - "PUT /api/stations/46f41f46-7cc5-45a9-a827-e1e86c5a5848 HTTP/1.1" 200 OK
+INFO:     10.64.131.139:49256 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.141.231:54352 - "GET /api/spotify/callback?code=AQAyqVp2zxSgUBySAADxf__f7bAIHa-1Cf4CpX3yTMexa-eHVy2cCnDqAEPYbwFPfCdiA5BuS-3CD4qQgVJRPm1g18ouPv0rzCcpogNo4HxcAulHeLQNvKkD6AcVbK7NYgt3kQbD60kwDg9odA-QPpUyakfoMj643FWItuA8KFwggtNnzX-cIZDcUmxqwxf8dirFIkozN8VzuliDiX84Qz2U3v12uMLaAL-cI3d_jBcjIlCveodLgn6oJ2tEb4POfhhBKlw59Pe07w0tZn1T2Z1_iz2Uddjjc6P_kH1SYsDnYAGLVwJ75CY3pOj-bkJV21vIoJFPHPNjNGqpbKpiRmg6KXyshfd71Eq8M-D7ki-P HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.141.240:50592 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.141.240:50592 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.141.240:50592 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.141.240:58768 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.240:58782 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.130.228:41414 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.130.249:58522 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.130.249:58536 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.240:58782 - "GET /api/spotify/artists/by-genre?genres=metal HTTP/1.1" 200 OK
+INFO:     10.64.141.231:37316 - "GET /api/spotify/artists/by-genre?genres=hip-hop,metal HTTP/1.1" 200 OK
+INFO:     10.64.130.228:41414 - "GET /api/spotify/artists/by-genre?genres=metal,rock HTTP/1.1" 200 OK
+INFO:     10.64.141.239:40410 - "GET /api/spotify/artists/by-genre?genres=hip-hop,r-n-b,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.240:58768 - "GET /api/spotify/artists/by-genre?genres=metal,rock,hip-hop HTTP/1.1" 200 OK
+INFO:     10.64.130.228:41420 - "GET /api/spotify/artists/by-genre?genres=metal HTTP/1.1" 200 OK
+INFO:     10.64.130.228:34088 - "PUT /api/stations/46f41f46-7cc5-45a9-a827-e1e86c5a5848 HTTP/1.1" 200 OK
+INFO:     10.64.130.249:34148 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.141.240:55336 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.131.139:36480 - "GET /api/spotify/callback?code=AQCi9Yd0fw97G7UjD6Ue3Ma8ecZBfQ_WteQBhYXVAtibwaZ8_vyiSNdo-npMLdrnSuhPZQb2r3rp1fXQDmEUkK_-xcfSA1rd7xlmYZRQeetIJpWYnSm3o-D2l4jVT2wdUVGGnPQncNODCYtINl-xdK4bY2hsejyFtlB-KcsedLqCP5FexYfpofRAO7zhFoyBFNtmMcwrE6MGOdZ_KxT0hg13trIHG3_cLCFRvw3CFt2idAuYa78XINCqHarDXxJQOuWE9rUbLen6bHTM3NYWBQL6ilTH2YBwxkRvdou2dXnLSzsG3s1pRzRDLnaReTYnB0JctsoBbRkW8_Patnc0HeiNofh0mDtbycOHgx605Oma HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.141.231:52804 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.130.228:55786 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.130.249:48370 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.130.249:37180 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.131.139:50308 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.129.27:48510 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.129.27:52194 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.128.136:34156 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.129.46:37034 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.129.27:52630 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.129.46:40456 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.129.27:56938 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.128.136:58026 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.128.135:36384 - "GET /api/spotify/callback?code=AQCJ2-NTtZPa7fshZE5ZFT7madmgx-cbtARTRf1Y2S39eDzWJCVaf8mjcGutcOtkWEXor4cJ2dQ_KAawmf4KRMYcWgrgJesnKxIgs9S2mtDJ2iFYU9qe4H-0iipjY3g0BSon5C5xzgwkdDQ_uV4yym6PMLeaKFQ_E40u0SOtbpk6fUbOp8fMlnV-QA4Q2iGIYvMThl7lx3zIdlzLsp-1wqpjotFJ0bKS0bOF2dJ-JyQSZDJu5ygFvOQHk2ttFMvY8tAQ1ZP5IQMaJ-ELeqzIpySSJNqc1Ctwao3hAsAoBZCDK7SizxkkwfsqKFv3nREFGNReTAHUvpY-PwZvWLvexdnPb5EmG4Gz8Fvc-dg3GYOd HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.129.27:54898 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.129.46:40448 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.128.135:36384 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.129.46:59942 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:44536 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.239:57348 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.240:36620 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.131.139:55328 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.130.228:40810 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.130.228:40814 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.231:55004 - "GET /api/spotify/artists/by-genre?genres=rock HTTP/1.1" 200 OK
+INFO:     10.64.141.231:55016 - "GET /api/spotify/artists/by-genre?genres=rock,pop HTTP/1.1" 200 OK
+INFO:     10.64.141.239:39138 - "GET /api/spotify/artists/by-genre?genres=rock,pop,electronic HTTP/1.1" 200 OK
+INFO:     10.64.130.249:50844 - "POST /api/spotify/search/artists?query=journ HTTP/1.1" 200 OK
+INFO:     10.64.141.231:33588 - "POST /api/spotify/search/artists?query=kansas HTTP/1.1" 200 OK
+INFO:     10.64.141.239:59192 - "POST /api/spotify/search/artists?query=boston HTTP/1.1" 200 OK
+INFO:     10.64.141.240:36130 - "POST /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.130.228:46848 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.130.228:54062 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.141.231:50944 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.141.240:54352 - "GET /api/spotify/callback?code=AQBDb25SW9uFYUKNscFG-231PgKnAdQ3DiHBhSGIh6jtW7JYcinRKZVbhnt_j2r-Ztk2hWHvUMTfV_NwPpvnBOfMAnckQor3_0RLBn9SgNYBe5TCLdKm7ee7UH2WDIfGp-4EbirUtYtibf26B32S7KIAudKGZEVZeQXYTcfCggf8r4K_YtXrOLT-QfVAFWwqN6Dy8zg4DgOGJzhIqiPJNQoQvQdJHwrZDuojEVSBKHdk-ojgQ8G5q28xkSdSnNa3U_tjZPiw50sBVSRsGsrdLwMgSb-JgCqZEessTlj3cmRnA1-1nyM3yrAquawlJVVIyTkF-s2jDM8OzvG0rfaXUT56mhtWBIubd0GInED5EVg6 HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.130.228:54062 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.141.240:54352 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.141.240:54352 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.130.249:48726 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.231:55776 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.239:40358 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.131.139:57156 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.249:47816 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.249:60348 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:48254 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.239:33822 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:41002 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:37520 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.130.249:36282 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.231:33824 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.240:45832 - "GET /api/spotify/artists/by-genre?genres=rock,pop,electronic HTTP/1.1" 200 OK
+INFO:     10.64.131.139:37188 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.240:45832 - "GET /api/spotify/artists/by-genre?genres=rock,pop,electronic HTTP/1.1" 200 OK
+INFO:     10.64.131.139:46610 - "PUT /api/stations/2cfe1507-2fc8-4ec5-a2b6-87e5c2cfa8da HTTP/1.1" 200 OK
+INFO:     10.64.130.249:46324 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.141.239:35872 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.130.228:35124 - "GET /api/spotify/callback?code=AQB-uV6ckjeSqLPUpo7lzpXd31ta7_GfgISS4NuctwmZzIySRWZmmy_iadg-1XjN2tpvaD7YALl9hH1blM4ZDGhzPYT8i435WjIzkuVfyS20H3cwHf-Bwfd5zW0uFFaBhKaDYz4trre-sBYBfu_4gTAstld-hxnJipz8Ed-Qdhpg8XSXdhhERBfh2RdQGF7Hvl13AUYJ9v8VYxyRCRnLOEbKEYDZQ_k-1NlmU4sLxlIqY_NPd02oSL_PN8BEcSxqct8FbI8bVNXRB9Gkl0EyrvE01khJZuqVp2G_qsaz85YgNeuDAZsXu5SZWnF8gGcIq8QNvcXsxxGzfC5oYJSaoEkonSa5NocpxRueY41iGfcS HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.130.249:49930 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.141.240:59116 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.141.239:35872 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.131.139:44934 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.131.139:36792 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:60662 - "GET /api/spotify/artists/by-genre?genres=rock,pop,electronic HTTP/1.1" 200 OK
+INFO:     10.64.130.249:60280 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.231:35666 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.131.139:44678 - "GET /api/spotify/artists/by-genre?genres=pop,electronic HTTP/1.1" 200 OK
+INFO:     10.64.141.231:45150 - "GET /api/spotify/artists/by-genre?genres=pop HTTP/1.1" 200 OK
+INFO:     10.64.131.139:44686 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.131.139:44702 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.239:47338 - "GET /api/spotify/artists/by-genre?genres=rock,pop,electronic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46822 - "GET /api/concerts/Bad%20Omens?lat=34.0522&lon=-118.2437&radius=150 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49910 - "GET /api/concerts/Bring%20Me%20The%20Horizon?lat=34.0522&lon=-118.2437&radius=150 HTTP/1.1" 200 OK
+INFO:     10.64.141.239:53288 - "POST /api/spotify/search/artists?query=taylor HTTP/1.1" 200 OK
+INFO:     10.64.141.240:60938 - "POST /api/spotify/search/artists?query=sabrina HTTP/1.1" 200 OK
+INFO:     10.64.130.228:49472 - "POST /api/spotify/search/artists?query=chap HTTP/1.1" 200 OK
+INFO:     10.64.141.239:57326 - "PUT /api/stations/2cfe1507-2fc8-4ec5-a2b6-87e5c2cfa8da HTTP/1.1" 200 OK
+INFO:     10.64.130.249:43940 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.141.240:35642 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.130.228:49494 - "GET /api/spotify/callback?code=AQBzbsLuPTVdaLTDJA9EcC4QWx0ooJtT77NUukm5RCRMsAfHJ7XxXL2QcoDowP0-D0K8-AO1xPwoduCRso05lDDxRurhLvqZWr_QSu219iebI5o5PBro12mDqbEh9WiMZB-8IqVmKzR0XAVy0SNEYsZSNKgfX4pBNerK9gwCrb3u1JCEg0iggV6Iy0UAZ3T6-B61BbESdBX22HTK1kK3ze7BemcvfsFsSQj0ZiGfNwyOr5ajFbTLKWYTJPBsyNrqMcLBSU-rL2eWn4PuxyeWxE6UWaZfAGcHx5tJoWC8j4GVg2OrgqOtdgIDzQ1GUdm6t3etDBZj5Ik6NVqrGUr7qvXrI7h15tkAYDoJVXRGqF6f HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.141.240:35642 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.141.239:34084 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.141.240:35642 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36506 - "GET /api/test/concert-bumper HTTP/1.1" 200 OK
+INFO:     10.64.131.139:51854 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:35728 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.231:54732 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.141.240:42830 - "GET /api/spotify/artists/by-genre?genres=rock,metal HTTP/1.1" 200 OK
+INFO:     10.64.141.239:49036 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.141.239:49044 - "GET /api/spotify/genres HTTP/1.1" 200 OK
+INFO:     10.64.130.249:45572 - "GET /api/spotify/artists/by-genre?genres=rock,metal HTTP/1.1" 200 OK
+INFO:     10.64.131.139:43624 - "GET /api/elevenlabs/voices HTTP/1.1" 200 OK
+INFO:     10.64.130.228:38298 - "PUT /api/stations/59f55374-b5dd-4094-a875-33245871fa6f HTTP/1.1" 200 OK
+INFO:     10.64.141.231:59880 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.141.231:59880 - "GET /api/spotify/auth HTTP/1.1" 200 OK
+INFO:     10.64.131.139:43322 - "GET /api/spotify/callback?code=AQCc3vzzFKg0-bRN1qeyAYl-WlLu_MK_Ah6sWLgfo7ebhtJTq_ayxZA1mtxOWWZ8aYJ5iDIDcP6RlC-fUiqaB2NwV60xmmXsoeZLCpCYds8-_YkQmVv7TcBclYBmcPkY7_---RcDtsOwh7b-V299bHM9itL_LfpcCwR7crRqTc0g_pIoh3czrs60EnCHU7I_7tLNh8aVW7sIRLiA433AeU-sI1B9H701cvnSeGaEL5B2NiZOHkAM72aJfG3MzELgb2lWdyxN_Iu1pq3wA2Br1FwsAvG8VFnWHuhlePQIFcRNTlm2jUkX76hnrFSi6iu3m_o1W5exBS0MfcyLQ8HzhjNhZHsLgW7BKwOMcndzGEAJ HTTP/1.1" 307 Temporary Redirect
+INFO:     10.64.141.240:38564 - "GET /api/spotify/token HTTP/1.1" 200 OK
+INFO:     10.64.131.139:43322 - "GET /api/stations HTTP/1.1" 200 OK
+INFO:     10.64.141.231:59880 - "POST /api/spotify/tracks HTTP/1.1" 200 OK
+INFO:     10.64.131.139:43336 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.239:40630 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.239:43408 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.141.239:44944 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.130.228:36622 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.131.139:34748 - "POST /api/bumpers/generate HTTP/1.1" 200 OK
+INFO:     10.64.131.139:52514 - "POST /api/bumpers/generate HTTP/1.1" 200 OK) for any new API errors or rate-limit warnings.
+    3. Time the  endpoint response to measure performance.
+  - Why fix this issue and what will be achieved with the fix? This is a critical usability issue. Fixing it ensures the application is responsive and provides a good user experience.
+  - Status: USER VERIFICATION PENDING
+  - Is recurring issue? Y (This issue recurred multiple times during the session.)
+  - Should Test frontend/backend/both after fix? Both
+  - Blocked on other issue: None
+
+**In progress Task List**:
+None.
+
+**Upcoming and Future Tasks**
+- **Upcoming Tasks:**
+  - **Task 1 (P1):** User-side task to set up a permanent custom domain (e.g., ) for the application using the Emergent platform's Link domain feature. The agent has already provided instructions for this.
+- **Future Tasks:**
+  - None explicitly planned.
+
+**Completed work in this session**
+- **Spotify Authentication:** Fixed Invalid redirect URI error by updating the configuration.
+- **Track Discovery Logic:**
+    - Implemented 80/20 discovery-to-selected artist track ratio.
+    - Rewrote the entire track discovery engine in  to use Spotify's Search API after key discovery endpoints were deprecated.
+    - Iteratively refined discovery logic to improve genre relevance, including checks for collaborators and a genre blocklist.
+    - Fixed a bug where the genre blocklist was too aggressive and blocked user-selected genres.
+- **API Rate Limiting:**
+    - Diagnosed and resolved a critical Spotify API rate-limiting issue that was freezing the backend.
+    - Heavily optimized the track fetching logic in , reducing API calls from over 100 to approximately 10 per request.
+    - Updated Spotify credentials and cleared the cached database token to escape the rate limit.
+- **Third-Party Integrations:**
+    - **WeatherAPI:** Integrated for real-time weather in bumpers, using a user-provided API key.
+    - **SeatGeek API:** Integrated for fetching nearby concert data for bumpers, using a user-provided Client ID.
+    - Abandoned Bandsintown integration due to API access restrictions.
+- **Geolocation:**
+    - Implemented browser geolocation to get the user's actual location for weather and concert data.
+    - Changed the permission prompt to trigger only when a feature requiring location (local weather or concert tours) is selected by the user.
+    - Fixed a bug where revoked permissions were not being re-requested.
+- **Player Experience:**
+    - Fixed a bug where playback on other Spotify devices would interfere with the app. The app now forces playback transfer to its own context.
+    - Limited the frequency of weather-related bumpers to once every 3-4 bumper generations.
+- **AI Bumper Quality:** Improved AI bumper generation by adding text sanitization and more explicit instructions in the Gemini prompt to prevent nonsensical output.
+- **UI/UX & Branding:**
+    - Redesigned the landing page to feature an animated audio visualizer.
+    - Changed the main title font to Aviano Future using Adobe Fonts.
+    - Implemented a custom logo based on a user-provided design, stacking YOUR over FM within a circular emblem with the visualizer in the background.
+
+**Earlier issues found/mentioned but not fixed**
+- **Issue 1: Bandsintown API Integration.**
+  - The agent attempted to integrate the Bandsintown API for concert data but was blocked by a User is not authorized error. Research revealed that a proper API key from a Bandsintown for Artists account is now required.
+  - This is not an open issue, as the functionality was successfully implemented using the SeatGeek API instead. This is noted for context.
+
+**Known issue recurrence from previous fork**
+- **Issue recurrence in previous fork**: The application repeatedly suffered from slow load times and unresponsiveness.
+- **Recurrence count**: This issue occurred at least 4-5 times throughout the session.
+- **Status**: RESOLVED (by optimizing API calls and updating credentials, but pending user verification on performance).
+- **Note**: The root cause was excessive API calls to Spotify in the track discovery logic. This triggered Spotify's rate limiter, which froze the backend. The optimization reduced calls from 100+ to ~10. Any future modification to the track fetching logic () must be done with extreme care to keep the number of API calls low.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- **Frontend**: React, TailwindCSS, Vite
+- **Backend**: FastAPI (Python)
+- **Database**: MongoDB
+- **Integrations**: Spotify Web Playback SDK, Spotify Web API, Google Gemini (via Emergent LLM Key), ElevenLabs API, WeatherAPI, SeatGeek API.
+- **UI/UX**: Custom animated visualizer using JavaScript Canvas, custom font loading via Adobe Fonts.
+
+**key DB schema**
+- ****:
+  - : Stores user-created radio stations, including , , , , .
+  - : Caches Spotify OAuth tokens for the user. Contains , , .
+
+**changes in tech stack**
+None.
+
+**All files of reference**
+- : The core backend file. Updated extensively to fix track discovery, add Weather/SeatGeek APIs, improve bumper generation, and optimize performance.
+- : Updated with new API keys for WeatherAPI, SeatGeek, and new Spotify credentials.
+- : Updated to handle multi-device conflicts, pass location data for bumpers, and manage playback transfer.
+- : Updated to handle location permission requests when specific bumper topics are selected.
+- : Completely redesigned to implement the new animated logo and custom font.
+- : Updated to include the Adobe Fonts stylesheet link for Aviano Future.
+- : Minor changes to support authentication flow.
+
+**Areas that need refactoring**:
+- The  file is now very large (~1000+ lines) and contains all logic for all endpoints. It could be broken down into smaller, more manageable modules (e.g., , , ).
+
+**key api endpoints**
+- : Fetches tracks for a station. **(This was the source of major performance issues and has been heavily optimized)**.
+- : Generates an AI DJ bumper using Gemini, ElevenLabs, and potentially real-time data from WeatherAPI or SeatGeek.
+- : Fetches available voices from ElevenLabs.
+- : Fetches nearby concerts for an artist using SeatGeek.
+- : Fetches weather for a location using WeatherAPI.
+- CRUD endpoints for .
+
+**Critical Info for New Agent**
+- **Spotify Rate Limiting is a critical risk.** The track fetching logic in  was optimized to make ~10 API calls. Do not add logic that significantly increases this number. If the app becomes slow, the first step is to check the backend logs for Spotify rate limit warnings.
+- The app uses several user-provided API keys stored in : , , , , and .
+- The Gemini integration for bumper scripts uses the .
+
+**documents created in this job**
+None.
+
+**Last 10 User Messages and any pending user messages**
+1.  **User:** Can we replicate the visualizer on the launch screen? (COMPLETED)
+2.  **User:** Can you put the text over it? (COMPLETED)
+3.  **User:** Can you add back the visualizer? (Agent was confused, user likely meant something was wrong with the previous change. Agent took a screenshot to clarify.) (ADDRESSED)
+4.  **User:** Could I get the hex codes for the app? (COMPLETED)
+5.  **User:** Can you change the landing page title text to Aviano Future? (COMPLETED)
+6.  **User:** I do have Adobe Fonts. (Provided context for the previous request). (ADDRESSED)
+7.  **User:** Provides Adobe Fonts stylesheet link. (COMPLETED)
+8.  **User:** Asks to stack text on the logo and provides an image of the design. (COMPLETED)
+9.  **Agent:** Implements the logo redesign. (IN PROGRESS, awaiting verification)
+10. **Agent:** Shows screenshot of the new logo. (Awaiting user feedback).
+
+**Project Health Check:**
+- Broken: None.
+- Mocked: None.
+
+**3rd Party Integrations**
+- **Spotify Web API & SDK**: Requires user-provided  and .
+- **Google Gemini**: Uses .
+- **ElevenLabs API**: Requires user-provided .
+- **WeatherAPI**: Requires user-provided .
+- **SeatGeek API**: Requires user-provided .
+- **Adobe Fonts**: Requires user-provided stylesheet URL from their Adobe account.
+
+**Testing status**
+- Testing agent used after significant changes: NO
+- Troubleshoot agent used after agent stuck in loop: NO
+- Test files created: []
+- Known regressions: Severe performance degradation due to Spotify API overuse was a recurring regression during development, which has since been addressed through optimization.
+
+**Credentials to test flow:**
+To test the full flow, the user will need:
+- A Spotify Premium account.
+- An ElevenLabs account with an API key.
+- A SeatGeek developer account to get a Client ID.
+- The WeatherAPI key is already present in .
+
+**What agent forgot to execute**
+The agent correctly identified and fixed all major issues raised by the user. The primary miss was not initially anticipating the severity and caching behavior of Spotify's rate limiting, which led to several loops of debugging the same app is slow/frozen symptom. However, this was eventually diagnosed and resolved.</analysis>

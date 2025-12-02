@@ -274,7 +274,7 @@ async def spotify_callback(code: str):
     })
     
     # Redirect to frontend - use the correct frontend URL
-    frontend_url = os.getenv('FRONTEND_URL', 'https://custom-fm-station.preview.emergentagent.com')
+    frontend_url = os.getenv('FRONTEND_URL', 'https://smart-station.preview.emergentagent.com')
     return RedirectResponse(url=f"{frontend_url}/?spotify_auth=success")
 
 @api_router.get("/spotify/token")
