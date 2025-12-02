@@ -7,46 +7,17 @@ import SpotifyPlayer from 'react-spotify-web-playback';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Helper function to get user's location
+// Helper function to get user's location (uses cached location from StationCreator or falls back to IP)
 const getUserLocation = () => {
-  return new Promise((resolve) => {
-    // Check if we have cached location
-    const cachedLocation = localStorage.getItem('userLocation');
-    if (cachedLocation) {
-      console.log('Using cached location:', cachedLocation);
-      resolve(cachedLocation);
-      return;
-    }
-
-    // Check if geolocation is available
-    if (!navigator.geolocation) {
-      console.log('Geolocation not available, using IP detection');
-      resolve('auto:ip');
-      return;
-    }
-
-    // Request location permission
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const locationString = `${latitude},${longitude}`;
-        console.log('Got user location:', locationString);
-        // Cache the location
-        localStorage.setItem('userLocation', locationString);
-        resolve(locationString);
-      },
-      (error) => {
-        console.log('Location permission denied or error:', error.message);
-        // Fall back to IP-based detection
-        resolve('auto:ip');
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 5000,
-        maximumAge: 3600000 // Cache for 1 hour
-      }
-    );
-  });
+  // Check if we have cached location (set when user selected "local weather" topic)
+  const cachedLocation = localStorage.getItem('userLocation');
+  if (cachedLocation) {
+    console.log('Using cached location:', cachedLocation);
+    return cachedLocation;
+  }
+  // Fall back to IP-based detection
+  console.log('No cached location, using IP detection');
+  return 'auto:ip';
 };
 
 const Player = ({ station, spotifyToken }) => {
