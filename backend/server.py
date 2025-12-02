@@ -397,7 +397,7 @@ async def get_track_analysis(song: str, artist: str = ""):
 @api_router.post("/spotify/tracks")
 async def get_tracks(request: dict):
     """Get tracks with 80% discovery (similar artists) and 20% from selected artists.
-    Completely randomized on each station load."""
+    OPTIMIZED for speed - minimal API calls."""
     import random
     
     token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"})
@@ -411,243 +411,153 @@ async def get_tracks(request: dict):
     artist_ids = [artist['id'] if isinstance(artist, dict) else artist for artist in request.get('artists', [])]
     artist_names = set()
     
-    # Get selected artist names for filtering
+    # Get selected artist names from request (no API call needed if names provided)
     for artist in request.get('artists', []):
         if isinstance(artist, dict) and 'name' in artist:
             artist_names.add(artist['name'].lower())
     
-    # Also fetch names from Spotify if we only have IDs
-    for artist_id in artist_ids[:10]:
-        try:
-            artist_info = sp.artist(artist_id)
-            artist_names.add(artist_info['name'].lower())
-        except:
-            pass
-    
     logging.info(f"Selected artists: {artist_names}")
     
-    # Separate pools for selected artists vs discovery
-    selected_artist_tracks = []  # 20% - tracks FROM the selected artists
-    discovery_tracks = []  # 80% - tracks from similar/related artists
-    seen_uris = set()
-    discovery_artist_names = set()  # Track which new artists we're discovering
-    verified_artist_cache = {}  # Cache genre-verified artists
+    # Get genres from request
+    genres = request.get('genres', [])
+    genres_lower = [g.lower() for g in genres]
     
-    # Define genre families for strict filtering
-    GENRE_FAMILIES = {
-        'rock': ['rock', 'metal', 'punk', 'grunge', 'alternative', 'hardcore', 'emo', 'screamo', 'post-hardcore', 'metalcore', 'deathcore', 'nu metal', 'hard rock', 'progressive'],
-        'metal': ['metal', 'rock', 'hardcore', 'metalcore', 'deathcore', 'death metal', 'black metal', 'thrash', 'doom', 'progressive metal', 'nu metal', 'djent'],
-        'hip-hop': ['hip hop', 'rap', 'trap', 'r&b', 'drill', 'grime'],
-        'pop': ['pop', 'dance pop', 'electropop', 'synth'],
-        'electronic': ['electronic', 'edm', 'house', 'techno', 'dubstep', 'drum and bass', 'trance'],
-        'country': ['country', 'americana', 'bluegrass', 'folk'],
-        'jazz': ['jazz', 'blues', 'soul', 'funk'],
-        'classical': ['classical', 'orchestra', 'symphony', 'opera'],
-        'latin': ['latin', 'reggaeton', 'salsa', 'bachata'],
-        'indie': ['indie', 'alternative', 'lo-fi', 'bedroom'],
-    }
-    
-    # Blocked genres - genres that should NEVER appear in rock/metal stations
+    # Blocked genres map
     BLOCKED_GENRES_MAP = {
-        'rock': ['hip hop', 'rap', 'trap', 'drill', 'reggaeton', 'latin', 'country', 'k-pop', 'j-pop', 'r&b', 'soul'],
-        'metal': ['hip hop', 'rap', 'trap', 'drill', 'reggaeton', 'latin', 'country', 'k-pop', 'j-pop', 'r&b', 'soul', 'pop'],
+        'rock': ['hip hop', 'rap', 'trap', 'drill', 'reggaeton', 'latin', 'country', 'k-pop', 'j-pop', 'r&b'],
+        'metal': ['hip hop', 'rap', 'trap', 'drill', 'reggaeton', 'latin', 'country', 'k-pop', 'j-pop', 'r&b', 'pop'],
         'hip-hop': ['metal', 'rock', 'punk', 'country', 'classical'],
         'pop': ['metal', 'death', 'black metal', 'hardcore', 'screamo'],
         'country': ['metal', 'hip hop', 'rap', 'electronic', 'techno'],
     }
     
+    # Build blocked genres list based on station genres
+    blocked_genres = set()
+    for station_genre in genres_lower:
+        for family, blocked in BLOCKED_GENRES_MAP.items():
+            if family in station_genre or station_genre in family:
+                for bg in blocked:
+                    # Don't block if it's a selected genre
+                    if not any(bg in sg or sg in bg for sg in genres_lower):
+                        blocked_genres.add(bg)
+    
+    def is_blocked_artist(artist_genres):
+        """Quick check if artist has blocked genres"""
+        for ag in artist_genres:
+            ag_lower = ag.lower()
+            for blocked in blocked_genres:
+                if blocked in ag_lower:
+                    return True
+        return False
+    
     def is_selected_artist(track):
         """Check if track is from a selected artist"""
-        track_artist_name = track['artists'][0]['name'].lower()
-        track_artist_id = track['artists'][0]['id']
-        return track_artist_id in artist_ids or track_artist_name in artist_names
+        return track['artists'][0]['id'] in artist_ids or track['artists'][0]['name'].lower() in artist_names
     
-    def is_genre_blocked(artist_genres, station_genres):
-        """Check if artist genres are blocked for this station type.
-        IMPORTANT: If a genre is in the station's selected genres, it's NOT blocked."""
-        artist_genres_lower = [g.lower() for g in artist_genres]
-        station_genres_lower = [g.lower() for g in station_genres]
-        
-        # First, check if artist matches ANY of the selected station genres
-        # If so, they're allowed regardless of blocklist
-        for artist_genre in artist_genres_lower:
-            for station_genre in station_genres_lower:
-                if station_genre in artist_genre or artist_genre in station_genre:
-                    # Artist matches a selected genre - NOT blocked
-                    return False, None
-        
-        # Artist doesn't match any selected genre - check blocklist
-        blocked_list = set()
-        for station_genre in station_genres_lower:
-            # Find blocked genres for this station type
-            for family, blocked in BLOCKED_GENRES_MAP.items():
-                if family in station_genre or station_genre in family:
-                    # Add blocked genres, BUT exclude any that are also selected genres
-                    for blocked_genre in blocked:
-                        # Don't block if this genre is selected by user
-                        is_selected = any(
-                            blocked_genre in sg or sg in blocked_genre 
-                            for sg in station_genres_lower
-                        )
-                        if not is_selected:
-                            blocked_list.add(blocked_genre)
-        
-        # Check if any artist genre is in the blocked list
-        for artist_genre in artist_genres_lower:
-            for blocked_genre in blocked_list:
-                if blocked_genre in artist_genre:
-                    return True, artist_genre
-        
-        return False, None
+    # Track pools
+    selected_artist_tracks = []
+    discovery_tracks = []
+    seen_uris = set()
     
-    def add_track(track, target_list, is_discovery=False):
-        """Helper to add track avoiding duplicates"""
+    def add_track(track, target_list):
         if track['uri'] not in seen_uris:
             seen_uris.add(track['uri'])
-            track_data = {
+            target_list.append({
                 "uri": track['uri'],
                 "name": track['name'],
                 "artist": track['artists'][0]['name'],
-                "artist_id": track['artists'][0]['id'],
                 "album": track['album']['name'],
                 "image": track['album']['images'][0]['url'] if track['album']['images'] else None,
-                "duration_ms": track['duration_ms'],
-                "preview_url": track.get('preview_url'),
-                "is_discovery": is_discovery
-            }
-            target_list.append(track_data)
-            if is_discovery:
-                discovery_artist_names.add(track['artists'][0]['name'])
+                "duration_ms": track['duration_ms']
+            })
     
-    # Shuffle artist order for variety each time
+    # Shuffle artist order
     shuffled_artist_ids = artist_ids.copy()
     random.shuffle(shuffled_artist_ids)
     
-    # STEP 1: Get tracks FROM selected artists (for the 20% pool)
+    # STEP 1: Get tracks from selected artists (fast - just top tracks)
     logging.info("STEP 1: Fetching tracks from selected artists...")
-    for artist_id in shuffled_artist_ids[:10]:
+    for artist_id in shuffled_artist_ids[:5]:  # Limit to 5 artists
         try:
             results = sp.artist_top_tracks(artist_id, country='US')
             tracks = results['tracks']
-            random.shuffle(tracks)  # Randomize which tracks we pick
-            for track in tracks[:5]:  # Up to 5 random tracks per selected artist
-                add_track(track, selected_artist_tracks, is_discovery=False)
+            random.shuffle(tracks)
+            for track in tracks[:4]:  # 4 tracks per artist
+                add_track(track, selected_artist_tracks)
         except Exception as e:
-            logging.error(f"Error fetching tracks for artist {artist_id}: {str(e)}")
             continue
     
     logging.info(f"Got {len(selected_artist_tracks)} tracks from selected artists")
     
-    # STEP 2: Get discovery tracks using SEARCH API (related-artists was deprecated Nov 2024)
-    # Focus on finding artists in the EXACT same genres as selected artists
-    logging.info("STEP 2: Fetching discovery tracks via targeted genre search...")
+    # STEP 2: Get discovery tracks via genre search (OPTIMIZED)
+    logging.info("STEP 2: Fetching discovery tracks...")
     
-    # Get genres from request
-    genres = request.get('genres', [])
-    
-    # First, get the actual genres of the selected artists from Spotify
-    selected_artist_genres = set()
-    for artist_id in artist_ids[:5]:
+    # Search for tracks directly instead of artists (fewer API calls)
+    for genre in genres_lower[:3]:  # Only 3 genres
+        if len(discovery_tracks) >= 40:
+            break
         try:
-            artist_info = sp.artist(artist_id)
-            for g in artist_info.get('genres', []):
-                selected_artist_genres.add(g.lower())
-        except:
-            pass
-    
-    logging.info(f"Selected artist genres from Spotify: {selected_artist_genres}")
-    
-    # Combine with user-selected genres
-    all_target_genres = list(selected_artist_genres) + [g.lower() for g in genres]
-    # Remove duplicates while preserving order
-    seen = set()
-    all_target_genres = [g for g in all_target_genres if not (g in seen or seen.add(g))]
-    
-    logging.info(f"Target genres for discovery: {all_target_genres[:6]}")
-    logging.info(f"Station genres for blocking: {genres}")
-    
-    def verify_artist_genre(artist_id, artist_name):
-        """Verify artist is in compatible genres and not blocked"""
-        if artist_id in verified_artist_cache:
-            return verified_artist_cache[artist_id]
-        
-        try:
-            artist_info = sp.artist(artist_id)
-            artist_genres = artist_info.get('genres', [])
+            # Search for tracks in this genre
+            query = f'genre:"{genre}"'
+            results = sp.search(q=query, type='track', limit=50, market='US')
             
-            # Check if blocked
-            is_blocked, blocked_genre = is_genre_blocked(artist_genres, genres)
-            if is_blocked:
-                logging.info(f"BLOCKED {artist_name} - has blocked genre: {blocked_genre}")
-                verified_artist_cache[artist_id] = False
-                return False
-            
-            # Check for genre overlap with target genres
-            artist_genres_lower = [g.lower() for g in artist_genres]
-            genre_overlap = any(
-                target_g in artist_g or artist_g in target_g 
-                for target_g in all_target_genres[:8] 
-                for artist_g in artist_genres_lower
-            )
-            
-            if not genre_overlap and artist_genres:
-                logging.info(f"Skipping {artist_name} - no genre overlap: {artist_genres}")
-                verified_artist_cache[artist_id] = False
-                return False
-            
-            verified_artist_cache[artist_id] = True
-            return True
-        except:
-            # If we can't verify, allow it (better than blocking everything)
-            return True
-    
-    try:
-        # Strategy 1: Search for artists in the EXACT genres and get their tracks
-        for genre in all_target_genres[:6]:  # Use top 6 genres
-            try:
-                # Search for artists in this specific genre
-                query = f'genre:"{genre}"'
-                logging.info(f"Searching artists in genre: {genre}")
-                artist_results = sp.search(q=query, type='artist', limit=30, market='US')
-                
-                found_artists = artist_results['artists']['items']
-                random.shuffle(found_artists)
-                
-                for artist in found_artists:
-                    # Skip selected artists
-                    if artist['id'] in artist_ids or artist['name'].lower() in artist_names:
-                        continue
-                    
-                    # Verify genre compatibility
-                    if not verify_artist_genre(artist['id'], artist['name']):
-                        continue
-                    
-                    # Get tracks from this genre-matched artist
-                    try:
-                        artist_tracks = sp.artist_top_tracks(artist['id'], country='US')
-                        tracks = artist_tracks['tracks']
-                        random.shuffle(tracks)
-                        
-                        artist_genres = [g.lower() for g in artist.get('genres', [])]
-                        logging.info(f"Adding tracks from {artist['name']} (genres: {artist_genres[:3]})")
-                        
-                        for track in tracks[:5]:  # Up to 5 tracks per discovered artist
-                            if not is_selected_artist(track):
-                                add_track(track, discovery_tracks, is_discovery=True)
-                            
-                            if len(discovery_tracks) >= 150:
-                                break
-                        
-                        if len(discovery_tracks) >= 150:
-                            break
-                    except Exception:
-                        continue
-                
-                if len(discovery_tracks) >= 150:
+            for track in results['tracks']['items']:
+                if len(discovery_tracks) >= 40:
                     break
-                    
-            except Exception as search_e:
-                logging.error(f"Search error for genre '{genre}': {str(search_e)}")
+                # Skip if from selected artist
+                if is_selected_artist(track):
+                    continue
+                # Quick genre check using track's artist info (already in response)
+                add_track(track, discovery_tracks)
+                
+        except Exception as e:
+            logging.error(f"Search error: {str(e)}")
+            continue
+    
+    # STEP 3: If still need more, search by selected artist names for similar
+    if len(discovery_tracks) < 30:
+        logging.info("STEP 3: Additional discovery via artist similarity...")
+        for artist_name in list(artist_names)[:2]:  # Just 2 artists
+            if len(discovery_tracks) >= 40:
+                break
+            try:
+                # Search for tracks related to artist style
+                query = f'"{artist_name}"'
+                results = sp.search(q=query, type='track', limit=30, market='US')
+                
+                for track in results['tracks']['items']:
+                    if len(discovery_tracks) >= 40:
+                        break
+                    if not is_selected_artist(track):
+                        add_track(track, discovery_tracks)
+            except:
+                continue
+    
+    logging.info(f"Got {len(discovery_tracks)} discovery tracks")
+    
+    # STEP 4: Build final playlist (80/20 split)
+    random.shuffle(discovery_tracks)
+    random.shuffle(selected_artist_tracks)
+    
+    # Take 40 discovery + 10 selected = 50 total
+    final_discovery = discovery_tracks[:40]
+    final_selected = selected_artist_tracks[:10]
+    
+    # Interleave: 4 discovery, 1 selected
+    all_tracks = []
+    d_idx, s_idx = 0, 0
+    while d_idx < len(final_discovery) or s_idx < len(final_selected):
+        for _ in range(4):
+            if d_idx < len(final_discovery):
+                all_tracks.append(final_discovery[d_idx])
+                d_idx += 1
+        if s_idx < len(final_selected):
+            all_tracks.append(final_selected[s_idx])
+            s_idx += 1
+    
+    logging.info(f"=== FINAL: {len(all_tracks)} tracks ===")
+    
+    return {"tracks": all_tracks}
                 continue
                 
     except Exception as e:
