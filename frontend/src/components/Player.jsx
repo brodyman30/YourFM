@@ -642,13 +642,18 @@ const Player = ({ station, spotifyToken }) => {
                     console.log('Next track:', nextTrack?.name, 'by', nextTrack?.artist);
                     setSongsSinceLastBumper(0); // Reset counter immediately
                     
+                    // Capture track info IMMEDIATELY to prevent race conditions
+                    const capturedFinishedTrack = { ...finishedTrack };
+                    const capturedNextTrack = nextTrack ? { ...nextTrack } : null;
+                    
                     // Duck volume IMMEDIATELY before any delay
                     if (spotifyPlayer) {
                       console.log('🎚️ Ducking volume immediately');
                       spotifyPlayer.setVolume(0.15);
                     }
                     
-                    setTimeout(() => generateAndPlayBumper(finishedTrack, nextTrack), 500);
+                    // Pass captured track info to prevent wrong songs in bumper
+                    setTimeout(() => generateAndPlayBumper(capturedFinishedTrack, capturedNextTrack), 500);
                   } else {
                     console.log(`Waiting... count=${newCount}, topics=${station.bumper_topics?.length}`);
                   }
