@@ -218,12 +218,23 @@
             link.click();
         }
         
-        // Initial draw
-        window.addEventListener('load', () => {
-            // Wait a bit for font to load
-            setTimeout(() => {
-                drawLogo(currentSize);
-            }, 500);
+        // Initial draw - wait for font to load
+        window.addEventListener('load', async () => {
+            try {
+                // Wait for Aviano Future font to load
+                await document.fonts.load('700 40px "aviano-future"');
+                console.log('Font loaded successfully');
+                // Give it a bit more time to be safe
+                setTimeout(() => {
+                    drawLogo(currentSize);
+                }, 200);
+            } catch (error) {
+                console.error('Font loading error:', error);
+                // Draw anyway after delay
+                setTimeout(() => {
+                    drawLogo(currentSize);
+                }, 1000);
+            }
         });
     </script>
 </body>
