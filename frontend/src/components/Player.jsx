@@ -631,18 +631,24 @@ const Player = ({ station, spotifyToken }) => {
                   console.log(`Song count: ${newCount} (trigger at 3)`);
                   const songsBeforeBumper = 3;
                   
-                  // Find the track that just finished in our list
-                  const finishedTrack = tracks.find(t => t.uri === justFinished?.uri);
+                  // Find the track that just finished in our list using our tracked data
                   const finishedIndex = tracks.findIndex(t => t.uri === justFinished?.uri);
-                  const nextTrack = finishedIndex !== -1 ? tracks[finishedIndex + 1] : null;
+                  const finishedTrack = finishedIndex !== -1 ? tracks[finishedIndex] : null;
+                  
+                  // The CURRENT track in Spotify state is actually the NEXT track
+                  const spotifyCurrentTrack = state.track_window?.current_track;
+                  const nextTrackIndex = finishedIndex !== -1 ? finishedIndex + 1 : -1;
+                  const nextTrack = nextTrackIndex !== -1 && nextTrackIndex < tracks.length ? tracks[nextTrackIndex] : null;
                   
                   if (newCount >= songsBeforeBumper && station.bumper_topics?.length > 0 && finishedTrack) {
                     console.log(`🎙️ TRIGGERING BUMPER after ${newCount} songs`);
-                    console.log('Last track:', finishedTrack.name, 'by', finishedTrack.artist);
-                    console.log('Next track:', nextTrack?.name, 'by', nextTrack?.artist);
+                    console.log('Last track (from our list):', finishedTrack.name, 'by', finishedTrack.artist);
+                    console.log('Next track (from our list):', nextTrack?.name, 'by', nextTrack?.artist);
+                    console.log('Spotify current track:', spotifyCurrentTrack?.name, 'by', spotifyCurrentTrack?.artists[0]?.name);
                     setSongsSinceLastBumper(0); // Reset counter immediately
                     
                     // Capture track info IMMEDIATELY to prevent race conditions
+                    // Use our tracked list, not Spotify's state
                     const capturedFinishedTrack = { ...finishedTrack };
                     const capturedNextTrack = nextTrack ? { ...nextTrack } : null;
                     
