@@ -33,7 +33,6 @@ const Player = ({ station, spotifyToken }) => {
   const [currentAlbumArt, setCurrentAlbumArt] = useState(null);
   const [currentTrackName, setCurrentTrackName] = useState('');
   const [playerReady, setPlayerReady] = useState(false);
-  const [userLocation, setUserLocation] = useState('auto:ip');
   const canvasRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
