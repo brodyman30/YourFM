@@ -678,6 +678,27 @@ async def get_concerts(artist_name: str, lat: float = None, lon: float = None, r
     concert = await get_nearby_concerts(artist_name, lat=lat, lon=lon, radius_miles=radius)
     return {"artist": artist_name, "concert": concert}
 
+@api_router.get("/test/concert-bumper")
+async def test_concert_bumper(artist: str = "Bad Omens", lat: float = 34.0522, lon: float = -118.2437):
+    """Test endpoint to preview what a concert bumper would say.
+    Uses LA coordinates by default since Bad Omens has a concert there."""
+    concert = await get_nearby_concerts(artist, lat=lat, lon=lon, radius_miles=150)
+    
+    if concert:
+        context = f"REAL CONCERT INFO: {artist} is playing at {concert['venue']} in {concert['city']}, {concert['state']} on {concert['date']}!"
+        return {
+            "concert_found": True,
+            "concert": concert,
+            "bumper_context": context,
+            "tip": "This context would be passed to the AI to generate the bumper"
+        }
+    else:
+        return {
+            "concert_found": False,
+            "message": f"No concerts found for {artist} within 150 miles of the location",
+            "tip": "Try a different artist or location"
+        }
+
 # ElevenLabs Voice Routes
 @api_router.get("/elevenlabs/voices")
 async def get_voices():
