@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOURFM Logo Exporter</title>
+    <link rel="stylesheet" href="https://use.typekit.net/afp3ljj.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 40px;
+            background: #0f0a1f;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+            min-height: 100vh;
+        }
+        
+        h1 {
+            color: #FBBF24;
+            font-size: 2rem;
+            margin: 0;
+        }
+        
+        #logoContainer {
+            background: #1a1033;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 0 50px rgba(139, 92, 246, 0.3);
+        }
+        
+        #logoCanvas {
+            display: block;
+            border: 2px solid #333;
+            border-radius: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .size-control {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        label {
+            color: #A78BFA;
+            font-weight: 600;
+        }
+        
+        input[type="number"] {
+            padding: 8px 12px;
+            background: #2d1f4e;
+            border: 2px solid #8B5CF6;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 16px;
+            width: 100px;
+        }
+        
+        button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #8B5CF6 0%, #FBBF24 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(251, 191, 36, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .info {
+            color: #9ca3af;
+            font-size: 14px;
+            text-align: center;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 YOURFM Logo Exporter</h1>
+    
+    <div id="logoContainer">
+        <canvas id="logoCanvas"></canvas>
+    </div>
+    
+    <div class="controls">
+        <div class="size-control">
+            <label for="sizeInput">Export Size (px):</label>
+            <input type="number" id="sizeInput" value="512" min="128" max="2048" step="64">
+            <button onclick="updateSize()">Update</button>
+        </div>
+        <button onclick="downloadLogo()">📥 Download Logo as PNG</button>
+        <p class="info">
+            The logo will be exported as a transparent PNG with the circular emblem, 
+            gradient background, golden border, and the stacked YOUR/FM text.
+        </p>
+    </div>
+
+    <script>
+        let currentSize = 512;
+        
+        function drawLogo(size) {
+            const canvas = document.getElementById('logoCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas to high resolution
+            canvas.width = size;
+            canvas.height = size;
+            canvas.style.width = Math.min(size, 400) + 'px';
+            canvas.style.height = Math.min(size, 400) + 'px';
+            
+            // Clear canvas with transparency
+            ctx.clearRect(0, 0, size, size);
+            
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = size * 0.42; // Logo takes up about 84% of canvas
+            const borderWidth = size * 0.033; // 6px at 180px = 0.033
+            
+            // Create gradient background for circle
+            const gradient = ctx.createLinearGradient(centerX, centerY - radius, centerX, centerY + radius);
+            gradient.addColorStop(0, '#1a1033');
+            gradient.addColorStop(1, '#2d1f4e');
+            
+            // Draw main circle with gradient
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Add inner shadow effect
+            ctx.save();
+            ctx.clip();
+            const innerShadowGradient = ctx.createRadialGradient(centerX, centerY, radius * 0.5, centerX, centerY, radius);
+            innerShadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            innerShadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+            ctx.fillStyle = innerShadowGradient;
+            ctx.fillRect(0, 0, size, size);
+            ctx.restore();
+            
+            // Draw golden border
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#FBBF24';
+            ctx.lineWidth = borderWidth;
+            ctx.stroke();
+            
+            // Add outer glow to border
+            ctx.shadowBlur = size * 0.08;
+            ctx.shadowColor = 'rgba(251, 191, 36, 0.6)';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Draw text
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // "YOUR" text - smaller, on top
+            const yourFontSize = size * 0.078; // 1.4rem relative to 180px
+            ctx.font = `700 ${yourFontSize}px "aviano-future", sans-serif`;
+            ctx.fillStyle = '#FBBF24';
+            ctx.shadowBlur = size * 0.055;
+            ctx.shadowColor = 'rgba(251, 191, 36, 0.6)';
+            
+            const textSpacing = size * 0.028;
+            const yourY = centerY - textSpacing - yourFontSize * 0.3;
+            ctx.fillText('YOUR', centerX, yourY);
+            
+            // "FM" text - larger, on bottom
+            const fmFontSize = size * 0.222; // 4rem relative to 180px
+            ctx.font = `700 ${fmFontSize}px "aviano-future", sans-serif`;
+            ctx.shadowBlur = size * 0.11;
+            ctx.shadowColor = 'rgba(251, 191, 36, 0.8)';
+            
+            const fmY = centerY + textSpacing + fmFontSize * 0.25;
+            ctx.fillText('FM', centerX, fmY);
+            
+            // Add extra glow to FM
+            ctx.shadowBlur = size * 0.22;
+            ctx.shadowColor = 'rgba(251, 191, 36, 0.4)';
+            ctx.fillText('FM', centerX, fmY);
+            
+            ctx.shadowBlur = 0;
+        }
+        
+        function updateSize() {
+            const input = document.getElementById('sizeInput');
+            currentSize = parseInt(input.value);
+            if (currentSize < 128) currentSize = 128;
+            if (currentSize > 2048) currentSize = 2048;
+            input.value = currentSize;
+            drawLogo(currentSize);
+        }
+        
+        function downloadLogo() {
+            const canvas = document.getElementById('logoCanvas');
+            const link = document.createElement('a');
+            link.download = `yourfm-logo-${currentSize}px.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        // Initial draw
+        window.addEventListener('load', () => {
+            // Wait a bit for font to load
+            setTimeout(() => {
+                drawLogo(currentSize);
+            }, 500);
+        });
+    </script>
+</body>
+</html>
