@@ -723,6 +723,12 @@ async def generate_bumper(request: BumperRequest):
                 weather_context = f"REAL WEATHER: It's currently {temp}°F and {condition.lower()} in {city}. "
                 logging.info(f"Weather for bumper: {weather_context}")
         
+        # Limit weather to once every 3-4 bumpers (25% chance)
+        import random
+        if weather_context and random.random() > 0.25:
+            logging.info("Skipping weather this bumper (rate limiting to 1 in 4)")
+            weather_context = ""
+        
         # Check for concert tours topic - fetch real concert data
         if request.topics and any('concert' in t.lower() or 'tour' in t.lower() for t in request.topics):
             concerts = await get_artist_concerts(track_artist, limit=2)
