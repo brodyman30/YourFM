@@ -49,21 +49,19 @@ const StationCreator = ({ station, onStationCreated, onCancel }) => {
   // Request location permission when "local weather" is selected
   const requestLocationPermission = () => {
     return new Promise((resolve) => {
-      // Check if we already have cached location
-      const cachedLocation = localStorage.getItem('userLocation');
-      if (cachedLocation) {
-        setLocationGranted(true);
-        resolve(true);
-        return;
-      }
-
       if (!navigator.geolocation) {
-        toast.error('Location not supported by your browser. Weather will use approximate location.');
+        toast.error('Location not supported by your browser. Weather/concerts will use approximate location.');
         resolve(false);
         return;
       }
 
-      toast.info('Requesting location for weather updates...');
+      // Check if we already have cached location - but still verify permission is valid
+      const cachedLocation = localStorage.getItem('userLocation');
+      
+      // Always request location to verify permission is still granted
+      // This handles cases where user revoked permission after initial grant
+      const topicType = cachedLocation ? 'Verifying' : 'Requesting';
+      toast.info(`${topicType} location for local features...`);
       
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -71,18 +69,25 @@ const StationCreator = ({ station, onStationCreated, onCancel }) => {
           const locationString = `${latitude},${longitude}`;
           localStorage.setItem('userLocation', locationString);
           setLocationGranted(true);
-          toast.success('Location enabled! Weather updates will use your location.');
+          if (!cachedLocation) {
+            toast.success('Location enabled! Weather & concert updates will use your location.');
+          } else {
+            toast.success('Location verified!');
+          }
           resolve(true);
         },
         (error) => {
           console.log('Location permission denied:', error.message);
-          toast.warning('Location denied. Weather will use approximate location based on IP.');
+          // Clear cached location since permission was revoked
+          localStorage.removeItem('userLocation');
+          setLocationGranted(false);
+          toast.warning('Location denied. Weather/concerts will use approximate location based on IP.');
           resolve(false);
         },
         {
           enableHighAccuracy: false,
           timeout: 10000,
-          maximumAge: 3600000
+          maximumAge: 0  // Don't use cached position, always get fresh
         }
       );
     });
