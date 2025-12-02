@@ -88,12 +88,12 @@ const StationCreator = ({ station, onStationCreated, onCancel }) => {
     });
   };
 
-  // Handle topic selection with special handling for weather
+  // Handle topic selection with special handling for location-based features
   const handleTopicSelect = async (topic) => {
     if (formData.bumper_topics.includes(topic)) return;
     
-    // If selecting "local weather", request location permission first
-    if (topic === 'local weather') {
+    // If selecting "local weather" or "concert tours", request location permission first
+    if (topic === 'local weather' || topic === 'concert tours') {
       await requestLocationPermission();
     }
     
