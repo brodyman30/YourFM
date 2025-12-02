@@ -561,17 +561,6 @@ async def get_tracks(request: dict):
 
 
 # Station Management Routes
-@api_router.get("/stations", response_model=List[Station])
-    
-    logging.info(f"=== FINAL TRACK MIX ===")
-    logging.info(f"Discovery: {len(final_discovery)} tracks from {len(final_discovery_artists)} NEW artists")
-    logging.info(f"Selected: {len(final_selected)} tracks from selected artists: {final_selected_artists}")
-    logging.info(f"Total: {len(all_tracks)} tracks")
-    logging.info(f"New artists in playlist: {final_discovery_artists}")
-    
-    return {"tracks": all_tracks}
-
-# Station Management Routes
 @api_router.post("/stations", response_model=Station)
 async def create_station(station_data: StationCreate):
     """Create a new station"""
