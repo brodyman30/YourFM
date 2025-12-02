@@ -177,8 +177,12 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            // "YOUR" text - smaller, on top
-            const yourFontSize = size * 0.078; // 1.4rem relative to 180px
+            // Font sizes based on 180px emblem: 1.4rem = 22.4px, 4rem = 64px
+            // Scale proportionally to current size
+            const scale = size / 180;
+            
+            // "YOUR" text - smaller, on top (1.4rem = 22.4px at 180px)
+            const yourFontSize = 22.4 * scale;
             ctx.font = `700 ${yourFontSize}px "aviano-future", sans-serif`;
             ctx.fillStyle = '#FBBF24';
             ctx.shadowBlur = size * 0.055;
@@ -188,8 +192,8 @@
             const yourY = centerY - textSpacing - yourFontSize * 0.3;
             ctx.fillText('YOUR', centerX, yourY);
             
-            // "FM" text - larger, on bottom
-            const fmFontSize = size * 0.222; // 4rem relative to 180px
+            // "FM" text - larger, on bottom (4rem = 64px at 180px)
+            const fmFontSize = 64 * scale;
             ctx.font = `700 ${fmFontSize}px "aviano-future", sans-serif`;
             ctx.shadowBlur = size * 0.11;
             ctx.shadowColor = 'rgba(251, 191, 36, 0.8)';
