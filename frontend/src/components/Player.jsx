@@ -657,9 +657,9 @@ const Player = ({ station, spotifyToken }) => {
               styles={{
                 bgColor: 'rgba(139, 92, 246, 0.1)',
                 color: '#FBBF24',
-                loaderColor: '#8B5CF6',
-                sliderColor: '#8B5CF6',
-                trackArtistColor: '#9ca3af',
+                loaderColor: '#FBBF24',
+                sliderColor: '#FBBF24',
+                trackArtistColor: '#FBBF24',
                 trackNameColor: '#FBBF24',
               }}
             />
