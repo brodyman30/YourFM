@@ -125,8 +125,8 @@ const LandingPage = ({ onSpotifyLogin }) => {
                 src="https://customer-assets.emergentagent.com/job_smart-station/artifacts/8gtpj7tl_Logo%20maker%20project-2%20%281%29.png"
                 alt="YOURFM Logo"
                 style={{
-                  width: '240px',
-                  height: '240px',
+                  width: '400px',
+                  height: '400px',
                   filter: 'drop-shadow(0 0 40px rgba(251, 191, 36, 0.4)) drop-shadow(0 0 80px rgba(139, 92, 246, 0.3))',
                   objectFit: 'contain'
                 }}
