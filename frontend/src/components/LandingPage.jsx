@@ -86,7 +86,7 @@ const LandingPage = ({ onSpotifyLogin }) => {
     <div className="landing-page" data-testid="landing-page">
       <div className="landing-bg"></div>
       <div className="landing-content">
-        {/* Animated Visualizer with Stacked Text Logo */}
+        {/* Animated Visualizer with Logo */}
         <div style={{
           marginBottom: '2rem',
           display: 'flex',
@@ -113,46 +113,24 @@ const LandingPage = ({ onSpotifyLogin }) => {
               }}
             />
             
-            {/* Circular Logo Emblem */}
+            {/* Logo Image */}
             <div style={{
               position: 'relative',
               zIndex: 10,
-              width: '180px',
-              height: '180px',
-              borderRadius: '50%',
-              background: 'linear-gradient(180deg, #1a1033 0%, #2d1f4e 100%)',
-              border: '6px solid #FBBF24',
-              boxShadow: '0 0 40px rgba(251, 191, 36, 0.4), 0 0 80px rgba(139, 92, 246, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5)',
               display: 'flex',
-              flexDirection: 'column',
               justifyContent: 'center',
-              alignItems: 'center',
-              padding: '20px'
+              alignItems: 'center'
             }}>
-              {/* YOUR text - smaller */}
-              <span style={{
-                fontFamily: '"aviano-future", sans-serif',
-                fontSize: '1.4rem',
-                fontWeight: 700,
-                color: '#FBBF24',
-                letterSpacing: '0.2em',
-                textShadow: '0 0 10px rgba(251, 191, 36, 0.6)',
-                marginBottom: '-5px'
-              }}>
-                YOUR
-              </span>
-              {/* FM text - larger */}
-              <span style={{
-                fontFamily: '"aviano-future", sans-serif',
-                fontSize: '4rem',
-                fontWeight: 700,
-                color: '#FBBF24',
-                letterSpacing: '0.1em',
-                textShadow: '0 0 20px rgba(251, 191, 36, 0.8), 0 0 40px rgba(251, 191, 36, 0.4)',
-                lineHeight: 1
-              }}>
-                FM
-              </span>
+              <img 
+                src="https://customer-assets.emergentagent.com/job_smart-station/artifacts/8gtpj7tl_Logo%20maker%20project-2%20%281%29.png"
+                alt="YOURFM Logo"
+                style={{
+                  width: '240px',
+                  height: '240px',
+                  filter: 'drop-shadow(0 0 40px rgba(251, 191, 36, 0.4)) drop-shadow(0 0 80px rgba(139, 92, 246, 0.3))',
+                  objectFit: 'contain'
+                }}
+              />
             </div>
           </div>
         </div>
