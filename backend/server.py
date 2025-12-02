@@ -869,12 +869,65 @@ Rules:
         
         logging.info(f"AI response: {raw_response}")
         
-        # Clean up response
+        # Clean up response - comprehensive sanitization for TTS
         bumper_text = raw_response.strip().strip('"').strip("'")
         
+        # Remove common AI artifacts and problematic patterns
+        import re
+        
+        # Remove markdown formatting
+        bumper_text = re.sub(r'\*\*([^*]+)\*\*', r'\1', bumper_text)  # **bold**
+        bumper_text = re.sub(r'\*([^*]+)\*', r'\1', bumper_text)  # *italic*
+        bumper_text = re.sub(r'\_\_([^_]+)\_\_', r'\1', bumper_text)  # __underline__
+        bumper_text = re.sub(r'\_([^_]+)\_', r'\1', bumper_text)  # _italic_
+        
+        # Remove hashtags and @ mentions
+        bumper_text = re.sub(r'#\w+', '', bumper_text)
+        bumper_text = re.sub(r'@\w+', '', bumper_text)
+        
+        # Remove URLs
+        bumper_text = re.sub(r'https?://\S+', '', bumper_text)
+        
+        # Remove emojis and special unicode characters
+        bumper_text = re.sub(r'[\U0001F600-\U0001F64F]', '', bumper_text)  # emoticons
+        bumper_text = re.sub(r'[\U0001F300-\U0001F5FF]', '', bumper_text)  # symbols & pictographs
+        bumper_text = re.sub(r'[\U0001F680-\U0001F6FF]', '', bumper_text)  # transport & map
+        bumper_text = re.sub(r'[\U0001F1E0-\U0001F1FF]', '', bumper_text)  # flags
+        bumper_text = re.sub(r'[\U00002702-\U000027B0]', '', bumper_text)  # dingbats
+        bumper_text = re.sub(r'[\U0001F900-\U0001F9FF]', '', bumper_text)  # supplemental symbols
+        
+        # Remove sound effects written as text (common AI artifact)
+        bumper_text = re.sub(r'\b(haha|hehe|lol|lmao|rofl|hmm+|uh+|um+|er+|ah+)\b', '', bumper_text, flags=re.IGNORECASE)
+        
+        # Remove repeated punctuation
+        bumper_text = re.sub(r'([!?.]){2,}', r'\1', bumper_text)
+        
+        # Remove parenthetical asides (often contain meta-text)
+        bumper_text = re.sub(r'\([^)]*\)', '', bumper_text)
+        bumper_text = re.sub(r'\[[^\]]*\]', '', bumper_text)
+        
+        # Remove asterisk actions (*laughs*, *clears throat*, etc.)
+        bumper_text = re.sub(r'\*[^*]+\*', '', bumper_text)
+        
+        # Remove quotes around the whole thing
+        bumper_text = bumper_text.strip('"').strip("'").strip('"').strip('"')
+        
+        # Clean up multiple spaces
+        bumper_text = re.sub(r'\s+', ' ', bumper_text).strip()
+        
+        # Remove leading/trailing punctuation artifacts
+        bumper_text = re.sub(r'^[,.\s]+', '', bumper_text)
+        bumper_text = re.sub(r'[,\s]+$', '', bumper_text)
+        if not bumper_text.rstrip().endswith(('!', '.', '?')):
+            bumper_text = bumper_text.rstrip() + '!'
+        
         # If response is bad, use template with actual track info
-        if len(bumper_text.split()) > 55 or any(word in bumper_text.lower() for word in ['prompt', 'instruction', 'create', 'generate']):
+        bad_words = ['prompt', 'instruction', 'create', 'generate', 'here is', 'here\'s the', 'i\'ll', 'i will', 'as a', 'as an']
+        if len(bumper_text.split()) > 55 or len(bumper_text.split()) < 5 or any(word in bumper_text.lower() for word in bad_words):
+            logging.warning(f"Bad bumper text detected, using fallback. Original: {bumper_text}")
             bumper_text = f"That was {track_artist} with {track_name}! Stay tuned for more hits on your F M, your {genres_str} station!"
+        
+        logging.info(f"Final bumper text: {bumper_text}")
         
         # Generate voice audio using ElevenLabs with stability settings for radio quality
         from elevenlabs import VoiceSettings
