@@ -205,6 +205,19 @@ const Player = ({ station, spotifyToken }) => {
       isLoadingTracksRef.current = true;
       setLoading(true);
       
+      // First, pause any existing Spotify playback to prevent interference
+      console.log('⏸️ Pausing any existing Spotify playback...');
+      try {
+        await axios.put(
+          'https://api.spotify.com/v1/me/player/pause',
+          {},
+          { headers: { 'Authorization': `Bearer ${spotifyToken}` } }
+        );
+      } catch (pauseError) {
+        // It's okay if this fails (might not be playing)
+        console.log('Note: Could not pause existing playback (may not be active)');
+      }
+      
       console.log(`🎵 Loading fresh randomized tracks for station: ${station.name}`);
       
       const response = await axios.post(
@@ -220,7 +233,10 @@ const Player = ({ station, spotifyToken }) => {
       setCurrentTrackIndex(0);
       loadedStationIdRef.current = station.id;
       
+      // Reset playback state
       setIsPlaying(false);
+      lastTrackUriRef.current = null; // Reset to ensure fresh start
+      
     } catch (error) {
       console.error('Error loading tracks:', error);
       toast.error('Failed to load tracks');
