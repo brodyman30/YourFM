@@ -44,6 +44,64 @@ const StationCreator = ({ station, onStationCreated, onCancel }) => {
   ];
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [locationGranted, setLocationGranted] = useState(false);
+
+  // Request location permission when "local weather" is selected
+  const requestLocationPermission = () => {
+    return new Promise((resolve) => {
+      // Check if we already have cached location
+      const cachedLocation = localStorage.getItem('userLocation');
+      if (cachedLocation) {
+        setLocationGranted(true);
+        resolve(true);
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        toast.error('Location not supported by your browser. Weather will use approximate location.');
+        resolve(false);
+        return;
+      }
+
+      toast.info('Requesting location for weather updates...');
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const locationString = `${latitude},${longitude}`;
+          localStorage.setItem('userLocation', locationString);
+          setLocationGranted(true);
+          toast.success('Location enabled! Weather updates will use your location.');
+          resolve(true);
+        },
+        (error) => {
+          console.log('Location permission denied:', error.message);
+          toast.warning('Location denied. Weather will use approximate location based on IP.');
+          resolve(false);
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 3600000
+        }
+      );
+    });
+  };
+
+  // Handle topic selection with special handling for weather
+  const handleTopicSelect = async (topic) => {
+    if (formData.bumper_topics.includes(topic)) return;
+    
+    // If selecting "local weather", request location permission first
+    if (topic === 'local weather') {
+      await requestLocationPermission();
+    }
+    
+    setFormData({
+      ...formData,
+      bumper_topics: [...formData.bumper_topics, topic]
+    });
+  };
 
   useEffect(() => {
     loadGenres();
