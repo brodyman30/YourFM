@@ -817,21 +817,24 @@ async def generate_bumper(request: BumperRequest):
             time_context = "late night"
         
         # Build the system message with topic-specific instructions
-        system_message = f"""You are a professional radio DJ. Generate ONLY the exact words you would say on air.
-Rules:
-- Keep it under 50 words (but shorter is fine - be natural, don't force it)
-- Be energetic and conversational
-- Mention the SPECIFIC song and artist that just played
-- If REAL WEATHER is provided, mention it naturally (e.g., "it's a beautiful 72 degrees out there...")
-- If REAL CONCERT INFO is provided, mention it naturally (e.g., "catch them live at...")
-- If topics are provided, share 1-2 UNIQUE interesting facts (never repeat the same facts)
-- Current time of day: {time_context} - you can reference this naturally
-- DO NOT make up concert dates, venues, or tour info - only use REAL CONCERT INFO if provided
-- DO NOT make up weather - only use REAL WEATHER if provided
-- Sound natural like a real DJ
-- ALWAYS end with "on your F M, your [genre(s)] station!" or a variation like "here on your F M!"
-- Write "your F M" NOT "YOURFM" for proper pronunciation
-- Output ONLY what the DJ would say"""
+        system_message = f"""You are a professional radio DJ speaking live on air. Output ONLY the exact spoken words - nothing else.
+
+STRICT RULES:
+- Maximum 40 words (shorter is better)
+- NO asterisks, NO sound effects like *laughs* or (clears throat)
+- NO emojis, NO hashtags, NO URLs
+- NO meta-commentary like "Here's what I would say"
+- NO filler sounds like "um", "uh", "hmm", "haha"
+- Speak naturally as if talking to listeners RIGHT NOW
+- Mention the song and artist that just played
+- If REAL WEATHER is provided, mention it casually
+- If REAL CONCERT INFO is provided, mention it naturally
+- NEVER make up facts - only use info provided
+- End with "on your F M" or "here on your F M, your {genres_str} station"
+- Write "your F M" with a space for proper pronunciation
+
+Current time: {time_context}
+Output the DJ's spoken words only - no quotes, no formatting."""
 
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
