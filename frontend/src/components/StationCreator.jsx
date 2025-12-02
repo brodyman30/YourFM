@@ -642,14 +642,7 @@ const StationCreator = ({ station, onStationCreated, onCancel }) => {
                 key={topic}
                 type="button"
                 data-testid={`topic-option-${topic}`}
-                onClick={() => {
-                  if (!formData.bumper_topics.includes(topic)) {
-                    setFormData({
-                      ...formData,
-                      bumper_topics: [...formData.bumper_topics, topic]
-                    });
-                  }
-                }}
+                onClick={() => handleTopicSelect(topic)}
                 disabled={formData.bumper_topics.includes(topic)}
                 style={{
                   background: formData.bumper_topics.includes(topic) 
