@@ -103,44 +103,74 @@ async def get_weather(location: str = "auto:ip") -> dict:
         logging.error(f"Error fetching weather: {str(e)}")
         return {}
 
-# Helper function to fetch concert data from Bandsintown
-async def get_artist_concerts(artist_name: str, limit: int = 3) -> List[dict]:
-    """Fetch upcoming concerts for an artist from Bandsintown API"""
+# Helper function to fetch nearby concerts from SeatGeek
+async def get_nearby_concerts(artist_name: str, lat: float = None, lon: float = None, radius_miles: int = 150) -> dict:
+    """Fetch upcoming concerts for an artist within radius of user's location using SeatGeek API.
+    Returns the nearest concert if one exists within the radius, otherwise None."""
+    if not SEATGEEK_CLIENT_ID:
+        logging.warning("SeatGeek API key not configured")
+        return None
+    
     try:
-        # URL encode the artist name
         import urllib.parse
         encoded_name = urllib.parse.quote(artist_name)
         
-        url = f"https://rest.bandsintown.com/artists/{encoded_name}/events"
+        url = "https://api.seatgeek.com/2/events"
         params = {
-            "app_id": BANDSINTOWN_APP_ID,
-            "date": "upcoming"
+            "q": artist_name,
+            "client_id": SEATGEEK_CLIENT_ID,
+            "per_page": 5,
+            "type": "concert"
         }
+        
+        # Add location filtering if coordinates provided
+        if lat and lon:
+            params["lat"] = lat
+            params["lon"] = lon
+            params["range"] = f"{radius_miles}mi"
         
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5)) as response:
                 if response.status == 200:
-                    events = await response.json()
+                    data = await response.json()
+                    events = data.get('events', [])
                     
-                    if isinstance(events, list) and len(events) > 0:
-                        concerts = []
-                        for event in events[:limit]:
-                            venue = event.get('venue', {})
-                            concerts.append({
-                                "date": event.get('datetime', ''),
-                                "venue": venue.get('name', 'Unknown Venue'),
-                                "city": venue.get('city', ''),
-                                "region": venue.get('region', ''),
-                                "country": venue.get('country', ''),
-                                "url": event.get('url', '')
-                            })
-                        return concerts
+                    if events and len(events) > 0:
+                        # Get the first (nearest/soonest) event
+                        event = events[0]
+                        venue = event.get('venue', {})
+                        
+                        # Parse the date
+                        datetime_local = event.get('datetime_local', '')
+                        formatted_date = ''
+                        if datetime_local:
+                            try:
+                                dt = datetime.fromisoformat(datetime_local.replace('Z', '+00:00'))
+                                formatted_date = dt.strftime('%B %d')  # e.g., "March 26"
+                            except:
+                                formatted_date = datetime_local[:10]
+                        
+                        concert = {
+                            "artist": artist_name,
+                            "title": event.get('short_title', event.get('title', '')),
+                            "date": formatted_date,
+                            "venue": venue.get('name', 'Unknown Venue'),
+                            "city": venue.get('city', ''),
+                            "state": venue.get('state', ''),
+                            "url": event.get('url', '')
+                        }
+                        
+                        logging.info(f"Found nearby concert for {artist_name}: {concert['venue']} in {concert['city']}, {concert['state']} on {concert['date']}")
+                        return concert
                     
-                logging.info(f"No concerts found for {artist_name}")
-                return []
+                    logging.info(f"No nearby concerts found for {artist_name} within {radius_miles} miles")
+                    return None
+                else:
+                    logging.error(f"SeatGeek API error: {response.status}")
+                    return None
     except Exception as e:
         logging.error(f"Error fetching concerts for {artist_name}: {str(e)}")
-        return []
+        return None
 
 # Models
 class Artist(BaseModel):
