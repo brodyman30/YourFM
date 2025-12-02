@@ -522,6 +522,22 @@ async def get_tracks(request: dict):
     # STEP 2: Get discovery tracks via genre search (OPTIMIZED)
     logging.info("STEP 2: Fetching discovery tracks...")
     
+    # Cache for artist genre checks to avoid duplicate API calls
+    artist_genre_cache = {}
+    
+    def get_artist_genres(artist_id):
+        """Get artist genres with caching"""
+        if artist_id in artist_genre_cache:
+            return artist_genre_cache[artist_id]
+        try:
+            artist_info = sp.artist(artist_id)
+            genres = [g.lower() for g in artist_info.get('genres', [])]
+            artist_genre_cache[artist_id] = genres
+            return genres
+        except:
+            artist_genre_cache[artist_id] = []
+            return []
+    
     # Search for tracks directly instead of artists (fewer API calls)
     for genre in genres_lower[:3]:  # Only 3 genres
         if len(discovery_tracks) >= 40:
@@ -537,8 +553,29 @@ async def get_tracks(request: dict):
                 # Skip if from selected artist
                 if is_selected_artist(track):
                     continue
-                # Quick genre check using track's artist info (already in response)
-                add_track(track, discovery_tracks)
+                
+                # Check if artist has blocked genres
+                artist_id = track['artists'][0]['id']
+                artist_genres = get_artist_genres(artist_id)
+                
+                if is_blocked_artist(artist_genres):
+                    logging.info(f"Blocked: {track['name']} by {track['artists'][0]['name']} (genres: {artist_genres})")
+                    continue
+                
+                # Also ensure at least one of the artist's genres matches station genres
+                has_matching_genre = False
+                for ag in artist_genres:
+                    for sg in genres_lower:
+                        if sg in ag or ag in sg:
+                            has_matching_genre = True
+                            break
+                    if has_matching_genre:
+                        break
+                
+                if has_matching_genre or not artist_genres:  # Allow if no genre data
+                    add_track(track, discovery_tracks)
+                else:
+                    logging.info(f"Skipped (no genre match): {track['name']} by {track['artists'][0]['name']} (genres: {artist_genres})")
                 
         except Exception as e:
             logging.error(f"Search error: {str(e)}")
