@@ -738,6 +738,18 @@ async def generate_bumper(request: BumperRequest):
         next_name = request.next_track_name or ""
         genres_str = " and ".join(request.genres) if request.genres else "music"
         
+        # Parse user location for concert search
+        user_lat = None
+        user_lon = None
+        if request.user_location and request.user_location != "auto:ip":
+            try:
+                coords = request.user_location.split(',')
+                if len(coords) == 2:
+                    user_lat = float(coords[0])
+                    user_lon = float(coords[1])
+            except:
+                pass
+        
         # Fetch real-time data based on topics
         real_time_context = ""
         weather_context = ""
@@ -759,24 +771,16 @@ async def generate_bumper(request: BumperRequest):
             logging.info("Skipping weather this bumper (rate limiting to 1 in 4)")
             weather_context = ""
         
-        # Check for concert tours topic - fetch real concert data
-        if request.topics and any('concert' in t.lower() or 'tour' in t.lower() for t in request.topics):
-            concerts = await get_artist_concerts(track_artist, limit=2)
-            if concerts:
-                concert = concerts[0]
-                concert_date = concert.get('date', '')
-                if concert_date:
-                    # Parse and format the date nicely
-                    try:
-                        dt = datetime.fromisoformat(concert_date.replace('T', ' ').split('+')[0])
-                        formatted_date = dt.strftime('%B %d')  # e.g., "January 15"
-                    except:
-                        formatted_date = concert_date[:10]
-                    
-                    city = concert.get('city', '')
-                    venue = concert.get('venue', '')
-                    real_time_context = f"REAL CONCERT INFO: {track_artist} is playing {venue} in {city} on {formatted_date}. "
-                    logging.info(f"Found concert for {track_artist}: {real_time_context}")
+        # Check for concert tours topic - fetch nearby concerts via SeatGeek
+        if request.topics and any('concert' in t.lower() or 'tour' in t.lower() or 'live' in t.lower() for t in request.topics):
+            # Only search if we have user location
+            if user_lat and user_lon:
+                concert = await get_nearby_concerts(track_artist, lat=user_lat, lon=user_lon, radius_miles=150)
+                if concert:
+                    real_time_context = f"REAL CONCERT INFO: {track_artist} is playing at {concert['venue']} in {concert['city']}, {concert['state']} on {concert['date']}! "
+                    logging.info(f"Found nearby concert: {real_time_context}")
+            else:
+                logging.info("Skipping concert search - no user location available")
         
         # Get current time for time-based mentions
         current_time = datetime.now()
