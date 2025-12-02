@@ -39,8 +39,8 @@ eleven_client = ElevenLabs(api_key=ELEVEN_API_KEY) if ELEVEN_API_KEY else None
 # Gemini Client
 EMERGENT_LLM_KEY = os.getenv('EMERGENT_LLM_KEY')
 
-# Bandsintown API (for concert data)
-BANDSINTOWN_APP_ID = os.getenv('BANDSINTOWN_APP_ID', 'yourfm_radio_app')
+# SeatGeek API (for concert data)
+SEATGEEK_CLIENT_ID = os.getenv('SEATGEEK_CLIENT_ID', '')
 
 # WeatherAPI (for weather data)
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY', '')
