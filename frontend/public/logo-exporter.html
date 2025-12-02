@@ -224,16 +224,22 @@
         
         // Initial draw - wait for font to load
         window.addEventListener('load', async () => {
+            const statusEl = document.getElementById('fontStatus');
             try {
                 // Wait for Aviano Future font to load
                 await document.fonts.load('700 40px "aviano-future"');
+                await document.fonts.load('700 80px "aviano-future"');
                 console.log('Font loaded successfully');
+                statusEl.textContent = '✅ Font loaded! Ready to export.';
+                statusEl.style.color = '#10b981';
                 // Give it a bit more time to be safe
                 setTimeout(() => {
                     drawLogo(currentSize);
                 }, 200);
             } catch (error) {
                 console.error('Font loading error:', error);
+                statusEl.textContent = '⚠️ Font may not be loaded. Click "Redraw Logo" button.';
+                statusEl.style.color = '#f59e0b';
                 // Draw anyway after delay
                 setTimeout(() => {
                     drawLogo(currentSize);
