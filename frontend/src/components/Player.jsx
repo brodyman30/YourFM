@@ -48,16 +48,6 @@ const Player = ({ station, spotifyToken }) => {
   const isLoadingTracksRef = useRef(false);
   const loadedStationIdRef = useRef(null);
 
-  // Get user location on mount (for weather bumpers)
-  useEffect(() => {
-    const fetchLocation = async () => {
-      const location = await getUserLocation();
-      setUserLocation(location);
-      console.log('📍 User location set:', location);
-    };
-    fetchLocation();
-  }, []);
-
   useEffect(() => {
     if (station) {
       // Reset the loaded station ref to force fresh track loading every time
