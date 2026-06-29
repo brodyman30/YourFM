@@ -44,13 +44,21 @@ Landing ("Start Listening") → My Stations → Create Station (name + Feed.fm s
 - spotify_tokens: legacy, unused by current flow.
 
 ## Implemented (2026-06)
-- Switched playback from Spotify SDK to Feed.fm licensed radio (demo creds). Verified E2E
-  (iteration_7: 9/9 backend pytest + full UI flow green; real cloudfront mp3 streamed).
+- Switched playback from Spotify SDK to Feed.fm licensed radio (demo creds). Verified E2E.
 - New StationCreator (Feed.fm station picker + voice + topics; artist search removed).
-- New HTML5-audio Player with play/skip, event reporting, AI bumper every 3 songs.
+- New HTML5-audio Player with play/skip, event reporting, AI bumper.
+- DJ behaviour (iteration_8, verified): bumper fires on a RANDOMIZED 3-4 count where both
+  completed songs AND skips increment one shared counter; music DUCKS (fade 1.0->0.12->1.0)
+  while the DJ talks over the next track instead of going silent.
+- Restored browser geolocation in the Player -> user_location passed to /api/bumpers/generate
+  for local-weather/concert mentions (falls back to IP-based weather if denied). Added the
+  'concert tours' bumper topic. Weather appears in ~25% of bumpers by design.
 - Landing page recopy ("licensed radio, no account needed").
-- (Earlier this session, Spotify-era) token auto-refresh, batched genre discovery, strict
-  genre filter, player remount-crash fix, device-handoff banner — now superseded by pivot.
+
+## Known minor items (from code review, not blocking)
+- fadeVolume setInterval not cleared on unmount (Player stays mounted so low risk).
+- Voice <select> placeholder allows submit before ElevenLabs voices load (~1-2s) -> validation toast.
+- StationCreate.feedfm_station_id is Optional but product-required (add server validation).
 
 ## Backlog / remaining (P1/P2)
 - P1: Obtain Feed.fm PRODUCTION token/secret → real curated catalog/stations (env-swappable).

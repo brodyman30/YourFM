@@ -26,6 +26,10 @@ const Player = ({ station, clientId, active = true }) => {
   const animRef = useRef(null);
   const thresholdRef = useRef(randomThreshold());
   const userLocationRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const dataArrayRef = useRef(null);
+  const sourceConnectedRef = useRef(false);
 
   // Load first track when station changes
   useEffect(() => {
@@ -64,7 +68,7 @@ const Player = ({ station, clientId, active = true }) => {
     }
   }, [play]);
 
-  // Decorative visualizer
+  // Reactive visualizer — driven by live audio energy from the analyser
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -72,11 +76,22 @@ const Player = ({ station, clientId, active = true }) => {
     canvas.width = 600;
     canvas.height = 120;
     let t = 0;
+    let smooth = 0;
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const speed = isPlaying || playingBumper ? 0.05 : 0.012;
-      t += speed;
+      let energy = 0;
+      const analyser = analyserRef.current;
+      const data = dataArrayRef.current;
+      if (analyser && data) {
+        analyser.getByteFrequencyData(data);
+        let sum = 0;
+        for (let k = 0; k < data.length; k++) sum += data[k];
+        energy = sum / (data.length * 255);
+      }
+      smooth += (energy - smooth) * 0.2;        // smooth the reaction
+      t += 0.012 + smooth * 0.08;               // tempo reacts to loudness
       const cy = canvas.height / 2;
+      const boost = 0.35 + smooth * 2.4;        // amplitude reacts to loudness
       const layers = [
         { c: 'rgba(139,92,246,0.25)', a: 28, f: 0.02, p: 0, w: 8 },
         { c: 'rgba(251,191,36,0.5)', a: 22, f: 0.03, p: 1, w: 4 },
@@ -88,7 +103,8 @@ const Player = ({ station, clientId, active = true }) => {
         ctx.lineWidth = L.w;
         ctx.lineCap = 'round';
         for (let x = 0; x <= canvas.width; x += 3) {
-          const y = cy + Math.sin(x * L.f + t + L.p) * L.a + Math.sin(x * L.f * 1.5 - t * 0.8) * (L.a * 0.4);
+          const amp = L.a * boost;
+          const y = cy + Math.sin(x * L.f + t + L.p) * amp + Math.sin(x * L.f * 1.5 - t * 0.8) * (amp * 0.4);
           x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
         ctx.stroke();
@@ -97,7 +113,7 @@ const Player = ({ station, clientId, active = true }) => {
     };
     animate();
     return () => animRef.current && cancelAnimationFrame(animRef.current);
-  }, [isPlaying, playingBumper]);
+  }, []);
 
   const resetAndLoad = async () => {
     setLoading(true);
@@ -138,7 +154,36 @@ const Player = ({ station, clientId, active = true }) => {
     } catch (e) { /* non-fatal */ }
   };
 
+  // Connect the <audio> element to a Web Audio AnalyserNode so the visualizer can react
+  // to the real music. Feed.fm's CDN sends CORS headers, so crossOrigin audio is readable.
+  const setupAnalyser = async () => {
+    try {
+      if (!audioRef.current) return;
+      if (!audioCtxRef.current) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        audioCtxRef.current = new Ctx();
+        analyserRef.current = audioCtxRef.current.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        analyserRef.current.smoothingTimeConstant = 0.8;
+        dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        await audioCtxRef.current.resume();
+      }
+      if (!sourceConnectedRef.current) {
+        const src = audioCtxRef.current.createMediaElementSource(audioRef.current);
+        src.connect(analyserRef.current);
+        analyserRef.current.connect(audioCtxRef.current.destination);
+        sourceConnectedRef.current = true;
+      }
+    } catch (e) {
+      console.warn('Analyser setup failed; visualizer stays decorative:', e?.message);
+    }
+  };
+
   const handleAudioPlay = () => {
+    setupAnalyser();
     setIsPlaying(true);
     if (play && !startedRef.current[play.id]) {
       startedRef.current[play.id] = true;
@@ -269,6 +314,7 @@ const Player = ({ station, clientId, active = true }) => {
       <audio
         ref={audioRef}
         src={play?.audio_file?.url}
+        crossOrigin="anonymous"
         onPlay={handleAudioPlay}
         onPause={() => setIsPlaying(false)}
         onEnded={handleAudioEnded}
