@@ -919,7 +919,7 @@ Output the DJ's spoken words only - no quotes, no formatting."""
             api_key=EMERGENT_LLM_KEY,
             session_id=str(uuid.uuid4()),
             system_message=system_message
-        ).with_model("gemini", "gemini-2.0-flash")
+        ).with_model("gemini", "gemini-2.5-flash")
         
         # Build specific prompt with actual track info and real-time context
         topics_str = ", ".join(request.topics) if request.topics else ""
