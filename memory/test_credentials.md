@@ -1,21 +1,17 @@
 # Test Credentials — YOURFM
 
 ## App auth
-- No custom username/password login. Auth is via Spotify OAuth.
-- A Spotify token (access + refresh) is stored in MongoDB `radio_app_db.spotify_tokens`
-  under user_id "default_user". The backend now AUTO-REFRESHES the access token when expired,
-  so backend Spotify endpoints work as long as a valid refresh_token exists in the DB.
+- No login. The new Feed.fm flow needs no user account.
+- A Feed.fm listener session (client_id) is created server-side on app load.
 
-## Spotify Developer App
-- SPOTIFY_CLIENT_ID / SECRET are in backend/.env.
-- Redirect URI must be registered in the user's Spotify Developer Dashboard and must equal
-  backend/.env SPOTIFY_REDIRECT_URI (= <REACT_APP_BACKEND_URL>/api/spotify/callback).
-  This changes each fork → user must re-register it to perform a fresh OAuth login.
+## Feed.fm
+- backend/.env: FEED_FM_TOKEN=demo, FEED_FM_SECRET=demo (development demo credentials).
+  Demo placement exposes 2 stations: 'Station One' (33714093), 'Station Two' (33714094).
+- For production, replace FEED_FM_TOKEN/FEED_FM_SECRET in backend/.env with Feed.fm-issued keys.
 
-## 3rd-party keys (in backend/.env)
-- EMERGENT_LLM_KEY (Gemini bumper scripts), ELEVEN_API_KEY, WEATHER_API_KEY, SEATGEEK_CLIENT_ID.
+## 3rd-party keys (backend/.env)
+- EMERGENT_LLM_KEY (Gemini bumper scripts), ELEVEN_API_KEY (DJ voices), WEATHER_API_KEY, SEATGEEK_CLIENT_ID.
 
-## Notes for testing
-- Full bumper playback verification requires a Spotify PREMIUM account (Web Playback SDK).
-- Backend track-discovery + bumper-generate endpoints are testable via curl using the
-  stored/refreshed token (no user interaction needed).
+## Notes
+- Audio is not audible in headless automation; verify via <audio> src + /api/feedfm/* 200s.
+- Legacy: db.spotify_tokens + /api/spotify/* still exist but are unused by the current flow.

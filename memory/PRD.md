@@ -1,48 +1,60 @@
 # YOURFM — Product Requirements
 
 ## Problem statement
-YOURFM is a personalized radio web app: AI-powered DJ bumpers, smart playlists, and
-professional audio mixing on top of Spotify. Core experience: pick genres + artists +
-a DJ voice, then YOURFM streams a station with periodic AI DJ bumpers.
+YOURFM is a personalized AI-DJ radio web app. As of June 2026 it streams **licensed music
+via Feed.fm** (replacing the previous Spotify Web Playback integration). Users create named
+stations, pick a Feed.fm station (genre/vibe), choose an AI DJ voice, and select bumper
+topics. The AI DJ talks between songs.
 
-## Core requirements
-- Generate playlists mixing ~80% discovery artists and ~20% selected artists.
-- Strict genre adherence (a metalcore station must NOT play Guns N' Roses).
-- AI DJ bumpers accurately read the track just played and the track coming up next.
-- Bumpers may include real-time weather (WeatherAPI) and concerts (SeatGeek) by geolocation.
-- Cohesive branding: custom PNG logo, yellow/golden accent (#FBBF24).
+## Why Feed.fm (vs Spotify)
+- Spotify model streamed through each user's own Premium account → single-device limit,
+  queue leaking into their Spotify, account hijacking. Inherent Spotify API limits.
+- Feed.fm = B2B licensed/indemnified catalog, hosted + streamed directly (no user account).
+  Operates under non-interactive (DMCA radio) rules.
+
+## Licensing constraints (important product limits)
+- Stations are provider-defined. Demo creds expose 'Station One' (33714093) + 'Station Two'.
+  Production = Feed.fm curates stations to spec (genre/mood/artist-radio), more of them.
+- Users CANNOT build free on-demand artist stations (that needs full interactive label deals).
+- DMCA: no pre-announcing the upcoming song; bumpers mention only the just-played track.
+- Skips are limited by radio rules (Feed.fm may reject /skip).
+
+## Current flow
+Landing ("Start Listening") → My Stations → Create Station (name + Feed.fm station + DJ voice
++ optional bumper topics) → Player (HTML5 audio, one track at a time, AI bumper every 3 songs).
 
 ## Architecture
-- Frontend: React + TailwindCSS (CRA), react-spotify-web-playback SDK, canvas visualizer.
-- Backend: FastAPI + MongoDB (motor). All routes prefixed `/api`.
-- Integrations: Spotify Web API & Playback SDK (user OAuth), Google Gemini via EMERGENT_LLM_KEY
-  (gemini-2.0-flash) for bumper scripts, ElevenLabs TTS, WeatherAPI, SeatGeek.
+- Frontend: React (CRA) + Tailwind. Player uses HTML5 <audio>, decorative canvas visualizer.
+  App.js creates a Feed.fm session on mount and keeps <Player> persistently mounted.
+- Backend: FastAPI + MongoDB (motor). All routes `/api`.
+- Integrations: Feed.fm (licensed music, demo creds), Google Gemini via EMERGENT_LLM_KEY
+  (gemini-2.5-flash) for bumper scripts, ElevenLabs TTS, WeatherAPI, SeatGeek.
 
 ## Key endpoints
-- GET  /api/spotify/auth, /api/spotify/callback — OAuth flow
-- GET  /api/spotify/token — returns access token (now AUTO-REFRESHES if expired)
-- POST /api/spotify/tracks — discovery (80/20, strict genre filter, BATCHED artist lookups)
-- POST /api/bumpers/generate — Gemini script + ElevenLabs voice
-- GET  /api/elevenlabs/voices, /api/weather, /api/concerts/{artist}
+- POST /api/feedfm/session → client_id
+- GET  /api/feedfm/stations?client_id= → available stations
+- POST /api/feedfm/play?client_id=&station_id= → one track (audio_file.url, track, artist, art)
+- POST /api/feedfm/play/{play_id}/{start|complete|skip} → report playback events
+- POST /api/bumpers/generate → Gemini script + ElevenLabs audio (current track only)
+- CRUD /api/stations, GET /api/elevenlabs/voices, /api/weather, /api/concerts/{artist}
 
 ## DB (radio_app_db)
-- stations: {id, name, genres[], artists[{id,name}], bumper_topics[], voice_id, voice_name, user_id}
-- spotify_tokens: {user_id, access_token, refresh_token, expires_at}
-- bumpers: {id, station_id, text, audio_base64, voice_id}
+- stations: {id, name, genres[], artists[], bumper_topics[], voice_id, voice_name,
+             feedfm_station_id, feedfm_station_name, user_id}
+- spotify_tokens: legacy, unused by current flow.
 
 ## Implemented (2026-06)
-- Spotify token auto-refresh (`get_valid_access_token` / `get_spotify_client`) — fixes the
-  "expired token → can't see preview" lockout; uses stored refresh_token.
-- Track discovery rate-limit fix: replaced per-track `sp.artist()` (N+1, ~150 calls → 429s)
-  with batched `sp.artists()` (≤5 search + ~2-3 batch calls). ~2s response.
-- Strict genre adherence: target genre profile derived from selected artists' real genres;
-  discovery filtered by phrase-overlap; `-core` stations block classic/glam/hard rock
-  (GNR no longer leaks onto metalcore stations). Verified via curl.
-- Bumper accuracy: announcement now derived from Spotify's REAL playback state
-  (justFinished + current_track) instead of local array index that could drift.
+- Switched playback from Spotify SDK to Feed.fm licensed radio (demo creds). Verified E2E
+  (iteration_7: 9/9 backend pytest + full UI flow green; real cloudfront mp3 streamed).
+- New StationCreator (Feed.fm station picker + voice + topics; artist search removed).
+- New HTML5-audio Player with play/skip, event reporting, AI bumper every 3 songs.
+- Landing page recopy ("licensed radio, no account needed").
+- (Earlier this session, Spotify-era) token auto-refresh, batched genre discovery, strict
+  genre filter, player remount-crash fix, device-handoff banner — now superseded by pivot.
 
-## Backlog / remaining
-- P1: Spotify "Invalid redirect URI" — user must register the current preview callback URL
-  in their Spotify Developer Dashboard (URI changes each fork). Permanent fix = custom domain.
-- P2: Refactor bloated server.py (>1000 lines) into route modules.
-- P2: Bumper live-playback verification needs a Spotify Premium account (manual).
+## Backlog / remaining (P1/P2)
+- P1: Obtain Feed.fm PRODUCTION token/secret → real curated catalog/stations (env-swappable).
+- P2: Remove dead Spotify code (spotipy, /spotify/* routes, spotify_tokens) now that flow is Feed.fm.
+- P2: Refactor server.py (1158 lines) into routers (stations.py, feedfm.py, bumpers.py).
+- P2: Server-side validation requiring feedfm_station_id on new stations.
+- P2: Clean bumper <audio> onended/onerror handlers on unmount (minor leak).
