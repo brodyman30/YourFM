@@ -54,6 +54,7 @@ const Player = ({ station, spotifyToken, active = true }) => {
   const loadedStationIdRef = useRef(null);
   const spotifyPlayerRef = useRef(null);
   const deviceIdRef = useRef(null);
+  const wasActiveHereRef = useRef(false);
 
   // Pause YOURFM playback when the user navigates away from the player so it
   // stops holding the account's single active Spotify stream.
@@ -665,11 +666,13 @@ const Player = ({ station, spotifyToken, active = true }) => {
                 isPlayingRef.current = playing;
                 
                 // Detect when Spotify moved playback to another device (an account can
-                // only stream on one device at a time). Surface a "resume here" banner.
-                if (state.isActive === false) {
-                  setPlaybackMovedAway(true);
-                } else if (state.isActive === true) {
+                // only stream on one device at a time). Only flag a hand-off if playback
+                // was actually active HERE first (avoids false positives during SDK handshake).
+                if (state.isActive === true) {
+                  wasActiveHereRef.current = true;
                   setPlaybackMovedAway((prev) => (prev ? false : prev));
+                } else if (state.isActive === false && wasActiveHereRef.current) {
+                  setPlaybackMovedAway(true);
                 }
                 
                 // ALWAYS update current track display and album art when available
