@@ -631,20 +631,26 @@ const Player = ({ station, spotifyToken }) => {
                   console.log(`Song count: ${newCount} (trigger at 3)`);
                   const songsBeforeBumper = 3;
                   
-                  // Find the track that just finished in our list using our tracked data
-                  const finishedIndex = tracks.findIndex(t => t.uri === justFinished?.uri);
-                  const finishedTrack = finishedIndex !== -1 ? tracks[finishedIndex] : null;
+                  // Derive tracks DIRECTLY from Spotify's real playback state so the
+                  // announcement always matches what the listener actually heard / hears.
+                  const finishedTrack = justFinished ? {
+                    uri: justFinished.uri,
+                    name: justFinished.name,
+                    artist: justFinished.artists?.[0]?.name || ''
+                  } : null;
                   
-                  // The CURRENT track in Spotify state is actually the NEXT track
+                  // The track Spotify is playing NOW is what plays under/after the bumper = "coming up next"
                   const spotifyCurrentTrack = state.track_window?.current_track;
-                  const nextTrackIndex = finishedIndex !== -1 ? finishedIndex + 1 : -1;
-                  const nextTrack = nextTrackIndex !== -1 && nextTrackIndex < tracks.length ? tracks[nextTrackIndex] : null;
+                  const nextTrack = spotifyCurrentTrack ? {
+                    uri: spotifyCurrentTrack.uri,
+                    name: spotifyCurrentTrack.name,
+                    artist: spotifyCurrentTrack.artists?.[0]?.name || ''
+                  } : null;
                   
                   if (newCount >= songsBeforeBumper && station.bumper_topics?.length > 0 && finishedTrack) {
                     console.log(`🎙️ TRIGGERING BUMPER after ${newCount} songs`);
-                    console.log('Last track (from our list):', finishedTrack.name, 'by', finishedTrack.artist);
-                    console.log('Next track (from our list):', nextTrack?.name, 'by', nextTrack?.artist);
-                    console.log('Spotify current track:', spotifyCurrentTrack?.name, 'by', spotifyCurrentTrack?.artists[0]?.name);
+                    console.log('Just played (Spotify state):', finishedTrack.name, 'by', finishedTrack.artist);
+                    console.log('Now playing / up next (Spotify state):', nextTrack?.name, 'by', nextTrack?.artist);
                     setSongsSinceLastBumper(0); // Reset counter immediately
                     
                     // Capture track info IMMEDIATELY to prevent race conditions

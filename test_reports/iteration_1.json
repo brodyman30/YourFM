@@ -1,0 +1,60 @@
+{
+  "summary": "Backend regression tests for YOURFM token refresh, genre adherence, no-429 discovery, and bumper generation. 9/10 tests passed. All P0 bug fixes (token auto-refresh, batched artist lookups, strict genre profile filter, classic-rock block for -core stations) are confirmed working. The only failure is unrelated: the Gemini model 'gemini-2.0-flash' used in /api/bumpers/generate is deprecated and returns 404 from Google.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/bumpers/generate",
+        "issue": "Returns 500 because model 'gemini-2.0-flash' is no longer available. Google returns: 'This model models/gemini-2.0-flash is no longer available.' The .with_model('gemini', 'gemini-2.0-flash') call (server.py line 922) must be upgraded (e.g. 'gemini-2.5-flash' or current supported model).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_spotify_bumpers.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Replace 'gemini-2.0-flash' in /app/backend/server.py (line ~922 inside /api/bumpers/generate) with a current Gemini model name such as 'gemini-2.5-flash'. The litellm error message confirms model deprecation."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1082 lines (>700 threshold) — should be split into routers (spotify_router.py, bumpers_router.py, weather_router.py, etc.) for maintainability.",
+    "/api/spotify/tracks: artist_top_tracks (line 562) is called per-artist in a loop — currently limited to 5 artists which is fine, but if a station grows to 20+ artists this would re-introduce N+1. Consider documenting the 5-artist cap.",
+    "/api/spotify/tracks: the genre_matches_target() uses substring matching (line 578: 'tg in ag or ag in tg'). Short genres like 'pop' would match 'pop punk' / 'k-pop' / 'pop rock' — acceptable for now but worth noting as a soft-filter.",
+    "blocked_genres for 'pop' family includes 'metal' (line 490) but not 'rap'/'trap' — pop stations could still pull rap-pop crossover. Not a regression, just inconsistent with rock blocking all hip-hop.",
+    "Bumper generate endpoint has a hard-coded model name (gemini-2.0-flash) with no environment-variable override — when model deprecates, a code change is required. Consider GEMINI_MODEL env var.",
+    "ElevenLabs voices endpoint returns 200 with empty list + 'message' field when no custom voices. Frontend must handle this — backend behaviour is reasonable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_spotify_bumpers.py (new)"
+  ],
+  "success_rate": {
+    "backend": "90% (9/10 tests)",
+    "frontend": "not tested (per request)"
+  },
+  "test_credentials": "Spotify token auto-refreshed from MongoDB radio_app_db.spotify_tokens (user_id 'default_user'). No app login required.",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All Spotify/genre fixes are verified GREEN (no 429, no classic-rock leak, 30+ tracks in <2s, token auto-refresh works). Only bumper-generate is broken due to deprecated Gemini model — once the model name is updated, rerun: pytest /app/backend/tests/test_spotify_bumpers.py::TestBumpers -v. The test test_bumper_generate_references_tracks asserts that the AI text references at least one of: 'bad omens', 'limits', 'spiritbox', 'the void'.",
+  "rca_of_the_issue": {
+    "bug": "/api/bumpers/generate returns 500",
+    "root_cause": "Google deprecated 'gemini-2.0-flash'. litellm propagates the 404 NotFoundError. Hard-coded in server.py line 922: .with_model('gemini', 'gemini-2.0-flash').",
+    "reproduction": "POST /api/bumpers/generate with any valid payload + real ElevenLabs voice_id → response: 500 {'detail': 'Error generating bumper: ... GeminiException ... This model models/gemini-2.0-flash is no longer available.'}",
+    "mitigation": "Change model identifier to a current Gemini model, e.g. .with_model('gemini', 'gemini-2.5-flash'). Optionally make the model configurable via env var GEMINI_MODEL."
+  },
+  "verified_fixes": {
+    "token_auto_refresh": "PASS - Spotify token endpoint returns valid token that authenticates against api.spotify.com/v1/me. Backend log shows 'Spotify access token refreshed' on expiry.",
+    "no_spotify_429": "PASS - Zero 429 events in backend logs. 3 back-to-back metal discovery calls each completed in 1.5-2s.",
+    "genre_adherence_metal": "PASS - Bad Omens + Spiritbox station derives target genre profile {'djent','metal','metalcore'}, returns 30 discovery tracks, and contains NO Guns N' Roses or other classic-rock acts (Aerosmith, Bon Jovi, AC/DC, etc.).",
+    "genre_adherence_hiphop": "PASS - hip-hop station returns 30 tracks with no Metallica/Slipknot/Lamb of God.",
+    "genre_adherence_pop": "PASS - pop station returns 30 tracks with no metal artists (incl. Bad Omens/Spiritbox).",
+    "tracks_count_30plus": "PASS - All discovery calls returned >=30 tracks.",
+    "performance_under_6s": "PASS - Per-call latency observed 1.5-2.0s in backend logs."
+  }
+}

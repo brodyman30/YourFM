@@ -17,6 +17,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 from elevenlabs import ElevenLabs
 import io
 import aiohttp
+import time
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -49,6 +50,52 @@ WEATHER_API_KEY = os.getenv('WEATHER_API_KEY', '')
 app = FastAPI()
 
 # Create a router with the /api prefix
+
+# Spotify token helpers (auto-refresh expired tokens)
+def _build_sp_oauth():
+    return SpotifyOAuth(
+        client_id=SPOTIFY_CLIENT_ID,
+        client_secret=SPOTIFY_CLIENT_SECRET,
+        redirect_uri=SPOTIFY_REDIRECT_URI,
+        scope=SPOTIFY_SCOPE,
+    )
+
+async def get_valid_access_token():
+    """Return a valid Spotify access token, refreshing it if expired. None if no token stored."""
+    token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"})
+    if not token_doc:
+        return None
+
+    # Refresh if token is expired or about to expire (60s buffer)
+    if token_doc.get('expires_at', 0) - 60 < int(time.time()):
+        refresh_token = token_doc.get('refresh_token')
+        if not refresh_token:
+            return None
+        try:
+            new_info = _build_sp_oauth().refresh_access_token(refresh_token)
+            update = {
+                "access_token": new_info['access_token'],
+                "expires_at": new_info['expires_at'],
+            }
+            if new_info.get('refresh_token'):
+                update["refresh_token"] = new_info['refresh_token']
+            await db.spotify_tokens.update_one({"user_id": "default_user"}, {"$set": update})
+            logging.info("Spotify access token refreshed")
+            return new_info['access_token']
+        except Exception as e:
+            logging.error(f"Spotify token refresh failed: {str(e)}")
+            return None
+
+    return token_doc['access_token']
+
+async def get_spotify_client():
+    """Return an authenticated spotipy client with a guaranteed-fresh token."""
+    token = await get_valid_access_token()
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+    return spotipy.Spotify(auth=token)
+
+
 api_router = APIRouter(prefix="/api")
 
 # Helper function to prepare data for MongoDB
@@ -279,13 +326,11 @@ async def spotify_callback(code: str):
 
 @api_router.get("/spotify/token")
 async def get_spotify_token():
-    """Get current Spotify access token"""
-    token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"}, {"_id": 0})
-    
-    if not token_doc:
+    """Get current Spotify access token (auto-refreshed if expired)"""
+    token = await get_valid_access_token()
+    if not token:
         raise HTTPException(status_code=404, detail="No token found. Please authenticate with Spotify.")
-    
-    return {"access_token": token_doc['access_token']}
+    return {"access_token": token}
 
 @api_router.get("/spotify/genres")
 async def get_spotify_genres():
@@ -301,12 +346,7 @@ async def get_spotify_genres():
 @api_router.post("/spotify/search/artists")
 async def search_artists(query: str = Query(...), genre: str = Query(None)):
     """Search for artists by name (genre optional)"""
-    token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"})
-    
-    if not token_doc:
-        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
-    
-    sp = spotipy.Spotify(auth=token_doc['access_token'])
+    sp = await get_spotify_client()
     
     # Search for artists with optional genre filter
     search_query = f"{query} genre:{genre}" if genre else query
@@ -326,12 +366,7 @@ async def search_artists(query: str = Query(...), genre: str = Query(None)):
 @api_router.get("/spotify/artists/by-genre")
 async def get_artists_by_genre(genres: str = Query(...)):
     """Get popular artists for given genres"""
-    token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"})
-    
-    if not token_doc:
-        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
-    
-    sp = spotipy.Spotify(auth=token_doc['access_token'])
+    sp = await get_spotify_client()
     
     genre_list = genres.split(',')
     all_artists = []
@@ -430,12 +465,7 @@ async def get_tracks(request: dict):
     OPTIMIZED for speed - minimal API calls."""
     import random
     
-    token_doc = await db.spotify_tokens.find_one({"user_id": "default_user"})
-    
-    if not token_doc:
-        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
-    
-    sp = spotipy.Spotify(auth=token_doc['access_token'])
+    sp = await get_spotify_client()
     
     # Extract artist IDs and names from the request
     artist_ids = [artist['id'] if isinstance(artist, dict) else artist for artist in request.get('artists', [])]
@@ -505,8 +535,28 @@ async def get_tracks(request: dict):
     shuffled_artist_ids = artist_ids.copy()
     random.shuffle(shuffled_artist_ids)
     
-    # STEP 1: Get tracks from selected artists (fast - just top tracks)
+    # STEP 1: Learn the selected artists' REAL genres + get their top tracks
     logging.info("STEP 1: Fetching tracks from selected artists...")
+    target_genres = set()
+    selected_ids_clean = [aid for aid in artist_ids if aid and not str(aid).startswith('legacy_')]
+    for i in range(0, len(selected_ids_clean), 50):
+        try:
+            for ainfo in sp.artists(selected_ids_clean[i:i + 50]).get('artists', []):
+                if ainfo:
+                    for g in ainfo.get('genres', []):
+                        target_genres.add(g.lower())
+        except Exception as e:
+            logging.error(f"Selected artist genre fetch error: {str(e)}")
+    # Fall back to station genres if artists have no genre data
+    if not target_genres:
+        target_genres = set(genres_lower)
+    logging.info(f"Target genre profile from selected artists: {target_genres}")
+    
+    # If the profile is a "-core" style (metalcore/deathcore/etc), classic/glam rock is NOT a match
+    if any('core' in tg for tg in target_genres):
+        for rg in ['classic rock', 'glam metal', 'hard rock', 'album rock', 'arena rock', 'classic']:
+            blocked_genres.add(rg)
+    
     for artist_id in shuffled_artist_ids[:5]:  # Limit to 5 artists
         try:
             results = sp.artist_top_tracks(artist_id, country='US')
@@ -519,86 +569,78 @@ async def get_tracks(request: dict):
     
     logging.info(f"Got {len(selected_artist_tracks)} tracks from selected artists")
     
-    # STEP 2: Get discovery tracks via genre search (OPTIMIZED)
+    def genre_matches_target(artist_genres):
+        """Strict: an artist's genre PHRASE must overlap the target profile."""
+        if not artist_genres:
+            return False
+        for ag in artist_genres:
+            for tg in target_genres:
+                if ag == tg or tg in ag or ag in tg:
+                    return True
+        return False
+    
+    # STEP 2: Get discovery tracks via genre search (OPTIMIZED - batched artist lookups)
     logging.info("STEP 2: Fetching discovery tracks...")
     
-    # Cache for artist genre checks to avoid duplicate API calls
-    artist_genre_cache = {}
+    # Search by the selected artists' specific genres first (e.g. "metalcore"), then station genres
+    search_genres = []
+    for g in list(target_genres) + genres_lower:
+        if g and g not in search_genres:
+            search_genres.append(g)
     
-    def get_artist_genres(artist_id):
-        """Get artist genres with caching"""
-        if artist_id in artist_genre_cache:
-            return artist_genre_cache[artist_id]
+    candidate_tracks = []
+    candidate_artist_ids = set()
+    for genre in search_genres[:5]:
         try:
-            artist_info = sp.artist(artist_id)
-            genres = [g.lower() for g in artist_info.get('genres', [])]
-            artist_genre_cache[artist_id] = genres
-            return genres
-        except:
-            artist_genre_cache[artist_id] = []
-            return []
-    
-    # Search for tracks directly instead of artists (fewer API calls)
-    for genre in genres_lower[:3]:  # Only 3 genres
-        if len(discovery_tracks) >= 40:
-            break
-        try:
-            # Search for tracks in this genre
             query = f'genre:"{genre}"'
             results = sp.search(q=query, type='track', limit=50, market='US')
-            
             for track in results['tracks']['items']:
-                if len(discovery_tracks) >= 40:
-                    break
-                # Skip if from selected artist
                 if is_selected_artist(track):
                     continue
-                
-                # Check if artist has blocked genres
-                artist_id = track['artists'][0]['id']
-                artist_genres = get_artist_genres(artist_id)
-                
-                if is_blocked_artist(artist_genres):
-                    logging.info(f"Blocked: {track['name']} by {track['artists'][0]['name']} (genres: {artist_genres})")
+                if track['uri'] in seen_uris:
                     continue
-                
-                # Also ensure at least one of the artist's genres matches station genres
-                has_matching_genre = False
-                for ag in artist_genres:
-                    for sg in genres_lower:
-                        if sg in ag or ag in sg:
-                            has_matching_genre = True
-                            break
-                    if has_matching_genre:
-                        break
-                
-                if has_matching_genre or not artist_genres:  # Allow if no genre data
-                    add_track(track, discovery_tracks)
-                else:
-                    logging.info(f"Skipped (no genre match): {track['name']} by {track['artists'][0]['name']} (genres: {artist_genres})")
-                
+                candidate_tracks.append(track)
+                if track['artists'][0]['id']:
+                    candidate_artist_ids.add(track['artists'][0]['id'])
         except Exception as e:
             logging.error(f"Search error: {str(e)}")
             continue
     
-    # STEP 3: If still need more, search by selected artist names for similar
-    if len(discovery_tracks) < 30:
-        logging.info("STEP 3: Additional discovery via artist similarity...")
-        for artist_name in list(artist_names)[:2]:  # Just 2 artists
-            if len(discovery_tracks) >= 40:
+    # Batch-fetch candidate artist genres (50 IDs per call -> a few calls total, no N+1)
+    artist_genre_cache = {}
+    artist_id_list = list(candidate_artist_ids)
+    for i in range(0, len(artist_id_list), 50):
+        try:
+            for ainfo in sp.artists(artist_id_list[i:i + 50]).get('artists', []):
+                if ainfo:
+                    artist_genre_cache[ainfo['id']] = [g.lower() for g in ainfo.get('genres', [])]
+        except Exception as e:
+            logging.error(f"Batch artist fetch error: {str(e)}")
+            continue
+    
+    logging.info(f"Fetched genres for {len(artist_genre_cache)} candidate artists")
+    
+    # Strict filter: not blocked AND shares a genre with the target profile
+    leftover_tracks = []  # passed block check but weak genre match (backfill only)
+    for track in candidate_tracks:
+        artist_id = track['artists'][0]['id']
+        artist_genres = artist_genre_cache.get(artist_id, [])
+        if is_blocked_artist(artist_genres):
+            logging.info(f"Blocked: {track['name']} by {track['artists'][0]['name']} (genres: {artist_genres})")
+            continue
+        if genre_matches_target(artist_genres):
+            if len(discovery_tracks) < 40:
+                add_track(track, discovery_tracks)
+        else:
+            leftover_tracks.append(track)
+    
+    # STEP 3: Only backfill with non-blocked leftovers if strict matches are too few
+    if len(discovery_tracks) < 25:
+        logging.info(f"Only {len(discovery_tracks)} strict matches; backfilling from non-blocked leftovers")
+        for track in leftover_tracks:
+            if len(discovery_tracks) >= 30:
                 break
-            try:
-                # Search for tracks related to artist style
-                query = f'"{artist_name}"'
-                results = sp.search(q=query, type='track', limit=30, market='US')
-                
-                for track in results['tracks']['items']:
-                    if len(discovery_tracks) >= 40:
-                        break
-                    if not is_selected_artist(track):
-                        add_track(track, discovery_tracks)
-            except:
-                continue
+            add_track(track, discovery_tracks)
     
     logging.info(f"Got {len(discovery_tracks)} discovery tracks")
     
