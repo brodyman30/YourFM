@@ -1,0 +1,98 @@
+{
+  "summary": "RCA for user-reported 'editing a station breaks the player'. Bug RELIABLY REPRODUCED. Root cause is NOT editing per se — editing just forces a navigation cycle that triggers the actual underlying issue: Player.jsx and/or react-spotify-web-playback / Spotify Web Playback SDK do NOT clean up properly on unmount, so the SECOND time <Player> mounts on the same page session, an uncaught 'Cannot read properties of undefined (reading length)' is thrown by the Spotify SDK / react-spotify-web-playback. The webpack dev-server 'Uncaught runtime errors' red overlay is then displayed on top of the player UI, making the player visually 'broken' to the user. POST /api/spotify/tracks is FINE (200, returns 30-48 tracks).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Player.jsx",
+        "issue": "Second mount of <Player> throws 'Cannot read properties of undefined (reading length)' (origin: cross-origin Spotify SDK / react-spotify-web-playback). Causes webpack dev-server red error overlay to cover the player UI. Underlying player canvas + album art DO render behind the overlay, but the overlay blocks all interaction and looks like a crash.",
+        "selector": "[data-testid=\"player-container\"] (covered by iframe#webpack-dev-server-client-overlay)",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Player.jsx connectAudioToVisualizer (line 132-189)",
+        "issue": "Calls audioContext.createMediaElementSource(spotifyAudio) on every mount. On second mount, the Spotify SDK's <audio> element may already be associated with a (now-closed) MediaElementSourceNode from the previous mount, which throws InvalidStateError. There is no guard / WeakMap / try-catch around createMediaElementSource.",
+        "selector": "Player.jsx line 179",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Player.jsx unmount cleanup (line 58-65)",
+        "issue": "Cleanup closes AudioContext (audioContextRef.current.close()) but does NOT disconnect/destroy the Spotify Web Playback SDK player instance. The react-spotify-web-playback library does not expose a clean teardown either. Combined with the SDK creating a singleton-ish global on window.Spotify, the second mount inherits stale internal state and crashes on a .length access.",
+        "selector": "Player.jsx useEffect cleanup [station]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Edit station then re-open in player",
+        "issue": "After PUT /api/stations/{id} returns 200 (response is well-formed: contains id, name, genres, artists, bumper_topics, voice_id, voice_name, genre), App.handleStationUpdated correctly updates stations[]. Clicking the station then mounts <Player> for the SECOND time in the session — and that second mount throws. The PUT response itself is fine; the issue is purely client-side double-mount of the Spotify SDK.",
+        "affected_selectors": ["[data-testid=\"player-container\"]", "[data-testid=\"spotify-player-container\"]"]
+      },
+      {
+        "flow": "Same bug WITHOUT editing — open station A → back → open station A again",
+        "issue": "Identical 'Cannot read properties of undefined (reading length)' error and red error overlay appear. Confirms editing is NOT the root cause. Also reproduces with open-A → back → open-B (different station). ANY remount of <Player> in the same session triggers the crash.",
+        "affected_selectors": ["[data-testid=\"player-container\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Primary fix: prevent <Player> from doing a fresh Spotify SDK init on every remount. Options: (a) keep <Player> mounted and toggle visibility instead of switching currentView; (b) cache the connected MediaElementSourceNode per <audio> element on a WeakMap so createMediaElementSource is only called once per element; (c) wrap createMediaElementSource in try/catch and on InvalidStateError reuse the existing source node; (d) call spotifyPlayer.disconnect() in the unmount cleanup.",
+    "Secondary fix: in App.js handleStationUpdated (line 74), if currentStation && currentStation.id === updatedStation.id, also setCurrentStation(updatedStation) so the player has fresh data if the user navigates back to it (this is a pre-existing latent bug noted in the request but is NOT the cause of the player breaking).",
+    "Defensive: add an Error Boundary around <Player> so a crash from the Spotify SDK does not bubble to the dev-server overlay and visually destroy the page; instead show a 'Player failed, please refresh' fallback.",
+    "Consider replacing react-spotify-web-playback (last published 2022, known double-mount issues) with a thin custom wrapper around the official Spotify Web Playback SDK that explicitly calls player.disconnect() on unmount.",
+    "Note: in PRODUCTION builds the red 'Uncaught runtime errors' overlay would NOT be rendered by webpack-dev-server, BUT the underlying Spotify SDK is still in a broken state on the second mount (playback will not start, getCurrentState returns null — visible in console as repeated 'Polling: No state available' after the error)."
+  ],
+  "critical_code_review_comments": [
+    "Player.jsx is 696 lines — should be split (visualizer logic, bumper logic, Spotify SDK wrapper) for maintainability.",
+    "Player.jsx line 50 useEffect resets loadedStationIdRef.current to null BEFORE calling loadTracks — the guard via loadedStationIdRef is therefore never effective; only isLoadingTracksRef prevents duplicate calls.",
+    "Player.jsx line 430 (handleSpotifyStateChange) accesses station.bumper_topics.length without optional chaining — would crash if bumper_topics is undefined. Currently unused as a prop but is dead/risky code.",
+    "Player.jsx line 211: PUT to https://api.spotify.com/v1/me/player/pause from the frontend with the access token in headers — works but couples the UI to Spotify's user API; consider moving to backend.",
+    "App.js handleStationUpdated (line 74) does NOT sync currentStation. If a user is on the player view and a station is edited elsewhere (or by a future flow), the player would show stale data. Latent bug.",
+    "react-spotify-web-playback library is unmaintained — recommend planning a migration."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not retested (skipped per request)",
+    "frontend": "Reproduction 100% reliable"
+  },
+  "test_credentials": "Spotify auto-auth via ?spotify_auth=success — no app login required. Backend has stored Spotify token that auto-refreshes.",
+  "seed_data_creation": "None. Used existing stations: 112cbc88-9570-4aef-a8b2-8d163d4c3605 (Metalcore) and 909e1274-da43-4f4e-942b-d6b17050fdc3 (Metal).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "After main agent applies the fix, verify by: (1) open station A, wait for player to mount, click Back to Stations, click station A again — there must be NO red 'Uncaught runtime errors' overlay and NO pageerror containing 'Cannot read properties of undefined (reading length)'. (2) Repeat after editing the station — same expectation. (3) Repeat with open A → back → open B (different station). (4) Verify spotify_player.getCurrentState() returns a non-null state on the second mount (currently it returns null indefinitely after the crash, see console 'Polling: No state available').",
+  "rca_of_the_issue": {
+    "bug": "User reports: 'after editing a station it breaks the player'",
+    "reproduction_steps": [
+      "1. Open https://audio-lab-build.preview.emergentagent.com/?spotify_auth=success (auto-auth)",
+      "2. Wait for stations list to render",
+      "3. Click any station-name-<id> — player mounts, no errors, audio visualizer + Spotify player render normally",
+      "4. Click Back to Stations",
+      "5. Click edit-station-<id>, then create-station-btn (Update Station) — even with NO changes",
+      "6. Click the same station-name-<id> again — RED OVERLAY 'Uncaught runtime errors: Script error.' appears, blocking the player",
+      "7. Console shows pageerror: 'Cannot read properties of undefined (reading length)' (source 0:0 because origin is cross-origin Spotify SDK)",
+      "8. The Player UI itself (canvas + album art) DOES render behind the overlay, but Spotify state polling returns null forever",
+      "ALSO REPRODUCES WITHOUT EDIT: step 3 → step 4 → click same station again triggers the SAME error. Editing is NOT the root cause; it merely forces the user through a navigation cycle that remounts <Player>."
+    ],
+    "root_cause": "Player.jsx unmount cleanup closes the AudioContext but does NOT (a) disconnect the Spotify Web Playback SDK player nor (b) release the MediaElementSourceNode created in connectAudioToVisualizer (line 179). On second mount, the Spotify SDK is re-initialized while there is still stale global state from the first mount, and the SDK / react-spotify-web-playback throws an uncaught TypeError on a .length access of an undefined collection (likely tracks/uris/devices). The dev-server overlay catches it and covers the UI. POST /api/spotify/tracks is verified 200 OK returning 30-48 tracks — backend is not at fault.",
+    "evidence": [
+      "PUT /api/stations/<id> → 200, payload includes all fields (bumper_topics, artists, genres, voice_id, etc.) — response is well-formed",
+      "POST /api/spotify/tracks → 200, returns {tracks: [...48 items]}",
+      "pageerror: 'Cannot read properties of undefined (reading length)' fires on SECOND mount of <Player> ONLY",
+      "Same error reproduces WITHOUT editing (open → back → open) — proving editing is not required",
+      "Dev-server overlay text: 'Uncaught runtime errors: Script error. at handleError bundle.js:38038:58' (Script error. masks cross-origin Spotify SDK origin)",
+      "Console after error: continuous 'Polling: No state available' — confirms Spotify SDK is in a dead/uninitialized internal state on the second mount"
+    ],
+    "mitigation_proposals": [
+      "A) (recommended) Keep <Player> mounted across navigation — toggle CSS visibility / display in App.js instead of unmounting via currentView switch. This avoids re-initializing the Spotify SDK entirely.",
+      "B) Cache MediaElementSourceNode in a module-level WeakMap keyed by the <audio> element and skip createMediaElementSource if already present. Wrap the call in try/catch.",
+      "C) On unmount, explicitly call spotifyPlayer.disconnect() to free SDK resources before unmounting.",
+      "D) Wrap <Player> with a React Error Boundary so even if the SDK throws, the UI shows a graceful fallback instead of being covered by the overlay.",
+      "E) (latent, not the cause) In App.js handleStationUpdated, also update currentStation when its id matches the updated station."
+    ]
+  }
+}
