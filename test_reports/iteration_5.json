@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 5 frontend regression + new-feature smoke. REGRESSION FROM ITERATION_4 IS PRESERVED ✅ (no webpack overlay, sdk_inits_count=1 across the full A→Back→Edit-A→Update→A→Back→B→Back→A flow, ZERO 'Cannot read properties of undefined (reading length)' pageerrors, player-container + spotify-player-container render on every open, POST /api/spotify/tracks fires 4× — one per station open with 48–50 tracks each, Back-to-Stations no longer throws despite the new pause-on-leave effect). HOWEVER, criterion #2 (device hand-off banner must NOT be visible during the normal flow) FAILS: the banner with data-testid 'playback-moved-banner' AND its 'resume-here-btn' are visible on first open of station A and remain visible on every subsequent open (station B included). Screenshot confirms 'Playback moved to another Spotify device.' banner with 'Resume on YOURFM' button shown at top of player even though no second Spotify device exists in headless automation. Only non-test pageerror is the expected EME message 'No supported keysystem was found.'.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Player.jsx — playback-moved-banner",
+        "issue": "Banner is shown ERRONEOUSLY whenever react-spotify-web-playback emits state.isActive===false, which also happens before/while the SDK has ever become active on this device (e.g. in headless automation without a Premium device, or briefly during initial SDK handshake). The review request explicitly required the banner to be absent in this flow. Observed: banner visible on first open of station A, after edit-and-reopen, on station B, and on every reopen.",
+        "selector": "[data-testid=\"playback-moved-banner\"], [data-testid=\"resume-here-btn\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/root/.emergent/automation_output/20260629_182446/console_20260629_182446.log"
+  ],
+  "action_items": [
+    "Fix the playbackMovedAway trigger in Player.jsx callback: do NOT set the banner on every state.isActive===false. Gate it on having previously seen state.isActive===true on this device (i.e. only flag a hand-off if playback was active here and then moved away). Suggested fix: track a ref `wasActiveHereRef` set to true the first time state.isActive===true; then `if (state.isActive === false && wasActiveHereRef.current) setPlaybackMovedAway(true);`. Optionally also require deviceIdRef.current and playerReady before allowing the banner."
+  ],
+  "critical_code_review_comments": [
+    "Banner condition `if (state.isActive === false)` is too aggressive — react-spotify-web-playback emits isActive=false during the initial SDK handshake and continuously in environments without a real device. Must require a prior active state to qualify as a hand-off.",
+    "Player.jsx is still ~808 lines (grew from ~725) — split recommended (PlayerCore / Visualizer / BumperManager / DeviceHandoff).",
+    "Polling log 'Polling: No state available' still fires every 1s indefinitely without Premium device — high console noise. Consider stopping the poller after N consecutive nulls.",
+    "resumePlaybackHere() will fail silently in dev if deviceIdRef.current is null AND spotifyPlayerRef.current.resume() is unavailable — currently shows a toast only on catch; consider guarding the button (disable) until deviceIdRef.current is set."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not-tested",
+    "frontend": "4 of 5 criteria PASS — only the banner-not-visible criterion FAILS"
+  },
+  "test_credentials": "Auto-auth via ?spotify_auth=success — stored Spotify token auto-refreshes.",
+  "seed_data_creation": "None. Used existing stations 112cbc88-9570-4aef-a8b2-8d163d4c3605 (Metalcore) and 909e1274-da43-4f4e-942b-d6b17050fdc3 (Metal).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Crash regression remains FIXED (iteration_4 baseline intact). The ONLY failure is the new device-handoff banner showing when it shouldn't. After the main agent gates the banner on a wasActiveHereRef flag (or playerReady + deviceIdRef + prior active state), re-run the same A→Back→Edit→A→Back→B→Back→A flow and verify: (a) banner_count == 0 on every open, (b) sdk_inits_count still == 1, (c) no new pageerrors. Pause-on-leave path is safe — Back-to-Stations triggered the effect with no console errors.",
+  "verification_evidence": {
+    "first_open_station_A": "overlay=0, sdk_inits=1, len_errs=0, banner_count=1 (BUG), resume_btn_count=1 (BUG)",
+    "back_to_stations": "layer_count=1, layer_display=none, len_errs=0, sdk_inits=1, pause-on-leave threw NO error",
+    "edit_and_reopen_A": "overlay=0, sdk_inits=1, len_errs=0",
+    "back_from_A_again": "len_errs=0",
+    "switch_to_B": "overlay=0, sdk_inits=1, len_errs=0, banner_count=1 (BUG)",
+    "reopen_A_after_B": "overlay=0, sdk_inits=1, len_errs=0",
+    "track_load_count": "4 POST /api/spotify/tracks (one per station open)",
+    "only_pageerror": "'No supported keysystem was found.' — expected EME/DRM"
+  },
+  "rca_of_the_issue": "react-spotify-web-playback callback emits state.isActive=false in many situations that are NOT a device hand-off: (1) during initial SDK handshake before any device is ready, (2) continuously in environments without a Spotify Premium account / playable device, (3) momentarily on token refresh. The new code at Player.jsx lines 669-673 unconditionally surfaces the banner on any isActive===false event. Mitigation: add a ref `wasActiveHereRef = useRef(false)`; in the callback, set it true on first `state.isActive===true`; only set `playbackMovedAway` true if `state.isActive===false && wasActiveHereRef.current`. This preserves the intended UX (banner appears only when playback that was here gets moved away) without firing in cold-start / no-device states."
+}

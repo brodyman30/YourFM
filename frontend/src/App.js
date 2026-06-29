@@ -230,6 +230,7 @@ function App() {
                 <Player
                   station={currentStation}
                   spotifyToken={spotifyToken}
+                  active={currentView === 'player'}
                 />
               </ErrorBoundary>
             </div>

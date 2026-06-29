@@ -25,7 +25,7 @@ const getUserLocation = () => {
   return 'auto:ip';
 };
 
-const Player = ({ station, spotifyToken }) => {
+const Player = ({ station, spotifyToken, active = true }) => {
   const [tracks, setTracks] = useState([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -38,6 +38,7 @@ const Player = ({ station, spotifyToken }) => {
   const [currentAlbumArt, setCurrentAlbumArt] = useState(null);
   const [currentTrackName, setCurrentTrackName] = useState('');
   const [playerReady, setPlayerReady] = useState(false);
+  const [playbackMovedAway, setPlaybackMovedAway] = useState(false);
   const canvasRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
@@ -52,6 +53,39 @@ const Player = ({ station, spotifyToken }) => {
   const isLoadingTracksRef = useRef(false);
   const loadedStationIdRef = useRef(null);
   const spotifyPlayerRef = useRef(null);
+  const deviceIdRef = useRef(null);
+
+  // Pause YOURFM playback when the user navigates away from the player so it
+  // stops holding the account's single active Spotify stream.
+  useEffect(() => {
+    if (!active && spotifyPlayerRef.current) {
+      try {
+        spotifyPlayerRef.current.pause();
+      } catch (e) {
+        console.warn('Error pausing on navigate away:', e?.message);
+      }
+    }
+  }, [active]);
+
+  // Re-transfer playback back to this browser device after Spotify moved it elsewhere.
+  const resumePlaybackHere = async () => {
+    try {
+      if (deviceIdRef.current) {
+        await axios.put(
+          'https://api.spotify.com/v1/me/player',
+          { device_ids: [deviceIdRef.current], play: true },
+          { headers: { Authorization: `Bearer ${spotifyToken}` } }
+        );
+      } else if (spotifyPlayerRef.current) {
+        await spotifyPlayerRef.current.resume();
+      }
+      setPlaybackMovedAway(false);
+      toast.success('Playback resumed on YOURFM');
+    } catch (e) {
+      console.error('Resume here failed:', e);
+      toast.error('Could not resume here. Open Spotify and pick "YOURFM" as the device.');
+    }
+  };
 
   // Disconnect the Spotify Web Playback SDK player when the Player unmounts so a
   // remount starts clean (prevents stale SDK state on the next mount).
@@ -485,6 +519,45 @@ const Player = ({ station, spotifyToken }) => {
     <div className="player-container" data-testid="player-container">
       <div className="player-glow"></div>
 
+      {/* Device hand-off banner: shown when Spotify moves playback to another device */}
+      {playbackMovedAway && (
+        <div
+          data-testid="playback-moved-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1rem',
+            background: 'rgba(251, 191, 36, 0.12)',
+            border: '2px solid rgba(251, 191, 36, 0.5)',
+            borderRadius: '12px',
+            padding: '0.9rem 1.2rem',
+            marginBottom: '1.5rem'
+          }}
+        >
+          <span style={{ color: '#FBBF24', fontSize: '0.95rem', fontWeight: 600 }}>
+            Playback moved to another Spotify device.
+          </span>
+          <button
+            data-testid="resume-here-btn"
+            onClick={resumePlaybackHere}
+            style={{
+              background: '#FBBF24',
+              color: '#1a1a1a',
+              border: 'none',
+              padding: '0.6rem 1.4rem',
+              borderRadius: '999px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '0.9rem'
+            }}
+          >
+            Resume on YOURFM
+          </button>
+        </div>
+      )}
+
       {/* Visualizer with Album Art */}
       <div style={{ 
         width: '100%', 
@@ -562,7 +635,7 @@ const Player = ({ station, spotifyToken }) => {
                   // Force transfer playback to this device when ready
                   player.addListener('ready', async ({ device_id }) => {
                     console.log('🎧 Spotify device ready:', device_id);
-                    
+                    deviceIdRef.current = device_id;
                     // Transfer playback to this device
                     try {
                       await axios.put(
@@ -587,9 +660,17 @@ const Player = ({ station, spotifyToken }) => {
                   return;
                 }
                 
-                const playing = !state.paused;
+                const playing = !!state.isPlaying;
                 setIsPlaying(playing);
                 isPlayingRef.current = playing;
+                
+                // Detect when Spotify moved playback to another device (an account can
+                // only stream on one device at a time). Surface a "resume here" banner.
+                if (state.isActive === false) {
+                  setPlaybackMovedAway(true);
+                } else if (state.isActive === true) {
+                  setPlaybackMovedAway((prev) => (prev ? false : prev));
+                }
                 
                 // ALWAYS update current track display and album art when available
                 if (state.track_window?.current_track) {
@@ -667,9 +748,10 @@ const Player = ({ station, spotifyToken }) => {
                     artist: justFinished.artists?.[0]?.name || ''
                   } : null;
                   
-                  // The track Spotify is playing NOW is what plays under/after the bumper = "coming up next"
-                  const spotifyCurrentTrack = state.track_window?.current_track;
-                  const nextTrack = spotifyCurrentTrack ? {
+                  // The track Spotify is playing NOW is what plays under/after the bumper = "coming up next".
+                  // In react-spotify-web-playback's callback state this is `state.track`.
+                  const spotifyCurrentTrack = state.track;
+                  const nextTrack = (spotifyCurrentTrack && spotifyCurrentTrack.uri) ? {
                     uri: spotifyCurrentTrack.uri,
                     name: spotifyCurrentTrack.name,
                     artist: spotifyCurrentTrack.artists?.[0]?.name || ''
