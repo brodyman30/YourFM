@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -45,6 +45,37 @@ SEATGEEK_CLIENT_ID = os.getenv('SEATGEEK_CLIENT_ID', '')
 
 # WeatherAPI (for weather data)
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY', '')
+
+# Feed.fm (licensed music streaming)
+FEED_FM_TOKEN = os.getenv('FEED_FM_TOKEN', 'demo')
+FEED_FM_SECRET = os.getenv('FEED_FM_SECRET', 'demo')
+FEED_FM_BASE = "https://feed.fm/api/v2"
+FEED_FM_AUTH = base64.b64encode(f"{FEED_FM_TOKEN}:{FEED_FM_SECRET}".encode()).decode()
+
+async def feedfm_request(method: str, endpoint: str, request: Request, data: dict = None):
+    """Proxy a request to Feed.fm using Basic auth and forwarding the client IP (for geofencing)."""
+    headers = {"Authorization": f"Basic {FEED_FM_AUTH}"}
+    xff = request.headers.get('x-forwarded-for')
+    client_ip = xff.split(',')[0].strip() if xff else (request.client.host if request.client else None)
+    if client_ip:
+        headers["X-Forwarded-For"] = client_ip
+    url = f"{FEED_FM_BASE}{endpoint}"
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession() as session:
+        if method == "POST":
+            async with session.post(url, headers=headers, data=data or {}, timeout=timeout) as resp:
+                try:
+                    body = await resp.json(content_type=None)
+                except Exception:
+                    body = {"success": False, "error": await resp.text()}
+                return resp.status, body
+        else:
+            async with session.get(url, headers=headers, params=data, timeout=timeout) as resp:
+                try:
+                    body = await resp.json(content_type=None)
+                except Exception:
+                    body = {"success": False, "error": await resp.text()}
+                return resp.status, body
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -1058,9 +1089,6 @@ Output the DJ's spoken words only - no quotes, no formatting."""
 @api_router.get("/")
 async def root():
     return {"message": "Radio App API"}
-
-# Include the router in the main app
-app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
