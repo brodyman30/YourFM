@@ -193,28 +193,9 @@ function App() {
         );
       
       case 'player':
-        return (
-          <div className="app-container">
-            <header className="app-header">
-              <div className="app-logo">YOURFM</div>
-              <div className="nav-buttons">
-                <button
-                  data-testid="back-from-player-btn"
-                  className="nav-button"
-                  onClick={() => setCurrentView('stations')}
-                >
-                  Back to Stations
-                </button>
-              </div>
-            </header>
-            <ErrorBoundary onReset={() => setCurrentView('stations')}>
-              <Player
-                station={currentStation}
-                spotifyToken={spotifyToken}
-              />
-            </ErrorBoundary>
-          </div>
-        );
+        // Player UI is rendered once, persistently, in the main return below
+        // (kept mounted to avoid re-initializing the Spotify Web Playback SDK).
+        return null;
       
       default:
         return <LandingPage onSpotifyLogin={handleSpotifyLogin} />;
@@ -225,6 +206,35 @@ function App() {
     <>
       <div className="App">
         {renderContent()}
+        {/* Persistent player layer: mounted once and kept alive across navigation
+            so the Spotify Web Playback SDK is never re-initialized (re-init crashes it). */}
+        {spotifyToken && currentStation && (
+          <div
+            data-testid="player-layer"
+            style={{ display: currentView === 'player' ? 'block' : 'none' }}
+          >
+            <div className="app-container">
+              <header className="app-header">
+                <div className="app-logo">YOURFM</div>
+                <div className="nav-buttons">
+                  <button
+                    data-testid="back-from-player-btn"
+                    className="nav-button"
+                    onClick={() => setCurrentView('stations')}
+                  >
+                    Back to Stations
+                  </button>
+                </div>
+              </header>
+              <ErrorBoundary onReset={() => setCurrentView('stations')}>
+                <Player
+                  station={currentStation}
+                  spotifyToken={spotifyToken}
+                />
+              </ErrorBoundary>
+            </div>
+          </div>
+        )}
       </div>
       <Toaster position="top-right" richColors />
     </>

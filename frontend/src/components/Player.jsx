@@ -466,7 +466,7 @@ const Player = ({ station, spotifyToken }) => {
     return songsSinceLastBumper >= songsBeforeBumper && station.bumper_topics.length > 0;
   };
 
-  if (loading) {
+  if (loading && tracks.length === 0) {
     return <div className="spinner" data-testid="player-loading"></div>;
   }
 
@@ -546,7 +546,7 @@ const Player = ({ station, spotifyToken }) => {
         <div style={{ marginTop: '2rem', visibility: playingBumper ? 'hidden' : 'visible' }} data-testid="spotify-player-container">
           {spotifyToken && tracks.length > 0 && currentTrack && (
             <SpotifyPlayer
-              key={`${station.id}-${tracks[0]?.uri}`}
+              key="yourfm-spotify-player"
               token={spotifyToken}
               uris={tracks.map(t => t.uri)}
               play={isPlaying}
