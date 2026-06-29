@@ -10,7 +10,7 @@ const availableTopics = [
   'artist history', 'album facts', 'music trivia', 'genre evolution',
   'song meanings', 'collaborations', 'awards and achievements',
   'music influences', 'behind the scenes', 'chart performance',
-  'fan favorites', 'local weather'
+  'fan favorites', 'local weather', 'concert tours'
 ];
 
 const StationCreator = ({ station, feedStations = [], onStationCreated, onCancel }) => {

@@ -5,7 +5,7 @@ import { Play, Pause, SkipForward } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
-const SONGS_BEFORE_BUMPER = 3;
+const randomThreshold = () => 3 + Math.floor(Math.random() * 2); // 3 or 4 songs/skips
 
 const Player = ({ station, clientId, active = true }) => {
   const [play, setPlay] = useState(null);
@@ -24,6 +24,8 @@ const Player = ({ station, clientId, active = true }) => {
   const autoplayNextRef = useRef(false);
   const canvasRef = useRef(null);
   const animRef = useRef(null);
+  const thresholdRef = useRef(randomThreshold());
+  const userLocationRef = useRef(null);
 
   // Load first track when station changes
   useEffect(() => {
@@ -42,6 +44,17 @@ const Player = ({ station, clientId, active = true }) => {
       try { bumperRef.current?.pause(); } catch (e) {}
     }
   }, [active]);
+
+  // Ask for the listener's location once (for local-weather / concert DJ mentions).
+  // Falls back silently to IP-based weather on the backend if denied/unavailable.
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { userLocationRef.current = `${pos.coords.latitude},${pos.coords.longitude}`; },
+      () => { userLocationRef.current = null; },
+      { timeout: 8000, maximumAge: 600000 }
+    );
+  }, []);
 
   // Autoplay newly fetched track when requested
   useEffect(() => {
@@ -93,7 +106,9 @@ const Player = ({ station, clientId, active = true }) => {
     setPlayingBumper(false);
     setSongCount(0);
     songCountRef.current = 0;
+    thresholdRef.current = randomThreshold();
     startedRef.current = {};
+    if (audioRef.current) audioRef.current.volume = 1;
     await fetchTrack(false);
     setLoading(false);
   };
@@ -131,30 +146,52 @@ const Player = ({ station, clientId, active = true }) => {
     }
   };
 
+  const fadeVolume = (target, ms) => {
+    const a = audioRef.current;
+    if (!a) return Promise.resolve();
+    const startVol = a.volume;
+    const steps = 24;
+    const stepMs = Math.max(10, ms / steps);
+    let i = 0;
+    return new Promise((resolve) => {
+      const id = setInterval(() => {
+        i += 1;
+        a.volume = Math.min(1, Math.max(0, startVol + (target - startVol) * (i / steps)));
+        if (i >= steps) { clearInterval(id); a.volume = Math.min(1, Math.max(0, target)); resolve(); }
+      }, stepMs);
+    });
+  };
+
   const handleAudioEnded = async () => {
     if (!play || advancingRef.current) return;
     advancingRef.current = true;
     const finished = play;
     await reportEvent(finished.id, 'complete');
-
-    const newCount = songCountRef.current + 1;
-    songCountRef.current = newCount;
-    setSongCount(newCount);
-
-    const shouldBumper = station.bumper_topics && station.bumper_topics.length > 0 && newCount >= SONGS_BEFORE_BUMPER;
-    if (shouldBumper) {
-      songCountRef.current = 0;
-      setSongCount(0);
-      await playBumper(finished);
-    }
-    await fetchTrack(true);
+    await advance(finished);
     advancingRef.current = false;
   };
 
-  const playBumper = async (finishedPlay) => {
+  // Count a completed song or skip toward the (randomized 3-4) DJ break, then load the next track.
+  const advance = async (finishedPlay) => {
+    const newCount = songCountRef.current + 1;
+    songCountRef.current = newCount;
+    setSongCount(newCount);
+    const wantBreak = station.bumper_topics && station.bumper_topics.length > 0 && newCount >= thresholdRef.current;
+    const next = await fetchTrack(true);
+    if (wantBreak && next) {
+      songCountRef.current = 0;
+      setSongCount(0);
+      thresholdRef.current = randomThreshold();
+      await djTalkOver(finishedPlay);
+    }
+  };
+
+  // Generate the DJ line, then duck the music down, play the DJ over it, and fade back up.
+  const djTalkOver = async (finishedPlay) => {
+    setPlayingBumper(true);
+    let text = null, audioUrl = null;
     try {
       const af = finishedPlay.audio_file || {};
-      setPlayingBumper(true);
       const res = await axios.post(`${API}/bumpers/generate`, {
         station_id: station.id,
         topics: station.bumper_topics,
@@ -162,25 +199,30 @@ const Player = ({ station, clientId, active = true }) => {
         artists: [],
         voice_id: station.voice_id,
         current_track_name: af.track?.title || '',
-        current_track_artist: af.artist?.name || ''
+        current_track_artist: af.artist?.name || '',
+        user_location: userLocationRef.current || undefined
       });
-      setBumperText(res.data.text);
-      const audioUrl = res.data.audio_url;
-      if (audioUrl && bumperRef.current) {
-        await new Promise((resolve) => {
-          const b = bumperRef.current;
-          b.src = audioUrl;
-          b.onended = resolve;
-          b.onerror = resolve;
-          b.play().catch(resolve);
-        });
-      }
+      text = res.data.text;
+      audioUrl = res.data.audio_url;
     } catch (e) {
       console.error('Bumper error:', e);
-    } finally {
-      setPlayingBumper(false);
-      setBumperText(null);
     }
+    setBumperText(text);
+    if (audioUrl && bumperRef.current) {
+      await fadeVolume(0.12, 500);        // music fades down as DJ starts
+      await new Promise((resolve) => {
+        const b = bumperRef.current;
+        b.src = audioUrl;
+        b.onended = resolve;
+        b.onerror = resolve;
+        b.play().catch(resolve);
+      });
+      await fadeVolume(1.0, 900);         // music fades back up
+    } else {
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    setPlayingBumper(false);
+    setBumperText(null);
   };
 
   const togglePlay = () => {
@@ -190,22 +232,19 @@ const Player = ({ station, clientId, active = true }) => {
   };
 
   const handleSkip = async () => {
-    if (!play || skipping || playingBumper) return;
+    if (!play || skipping || playingBumper || advancingRef.current) return;
     setSkipping(true);
     const skipped = play;
     try {
       const res = await axios.post(`${API}/feedfm/play/${play.id}/skip`, null, { params: { client_id: clientId } });
       if (res.data && res.data.success === false) {
         toast.info('Skip not allowed right now (radio rules).');
-      } else {
-        // Let the DJ talk after a skip too
-        if (station.bumper_topics && station.bumper_topics.length > 0) {
-          songCountRef.current = 0;
-          setSongCount(0);
-          await playBumper(skipped);
-        }
-        await fetchTrack(true);
+        return;
       }
+      // A skip counts toward the randomized 3-4 DJ break, just like a completed song.
+      advancingRef.current = true;
+      await advance(skipped);
+      advancingRef.current = false;
     } catch (e) {
       toast.info('Skip limit reached for now.');
     } finally {
@@ -303,7 +342,7 @@ const Player = ({ station, clientId, active = true }) => {
         </div>
         <p style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '1.25rem' }} data-testid="song-count">
           {station.bumper_topics && station.bumper_topics.length > 0
-            ? `DJ break in ${Math.max(0, SONGS_BEFORE_BUMPER - songCount)} song(s)`
+            ? `DJ break in ~${Math.max(0, thresholdRef.current - songCount)} more`
             : 'AI DJ breaks off'}
         </p>
       </div>
