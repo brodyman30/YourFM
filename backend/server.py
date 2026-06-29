@@ -259,23 +259,28 @@ class Station(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    genres: List[str]  # Changed to list for multiple genres
-    artists: List[Artist]
-    bumper_topics: List[str]
+    genres: List[str] = []
+    artists: List[Artist] = []
+    bumper_topics: List[str] = []
     voice_id: str
     voice_name: str
     user_id: str = "default_user"  # For demo purposes
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Feed.fm licensed-radio station mapping
+    feedfm_station_id: Optional[str] = None
+    feedfm_station_name: Optional[str] = None
     # Backward compatibility
     genre: Optional[str] = None
 
 class StationCreate(BaseModel):
     name: str
-    genres: List[str]  # Changed to list
-    artists: List[Artist]
-    bumper_topics: List[str]
+    genres: List[str] = []
+    artists: List[Artist] = []
+    bumper_topics: List[str] = []
     voice_id: str
     voice_name: str
+    feedfm_station_id: Optional[str] = None
+    feedfm_station_name: Optional[str] = None
 
 class Bumper(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1086,9 +1091,52 @@ Output the DJ's spoken words only - no quotes, no formatting."""
         logging.error(f"Error generating bumper: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating bumper: {str(e)}")
 
+# Feed.fm Licensed Radio Routes
+@api_router.post("/feedfm/session")
+async def feedfm_session(request: Request):
+    """Create a Feed.fm client session (anonymous listener id)."""
+    status, body = await feedfm_request("POST", "/client", request)
+    if status >= 400 or not body.get("success", True):
+        raise HTTPException(status_code=status if status >= 400 else 502, detail=body)
+    client_id = body.get("client_id") or (body.get("client") or {}).get("id")
+    return {"client_id": client_id}
+
+@api_router.get("/feedfm/stations")
+async def feedfm_stations(request: Request, client_id: str = Query(None)):
+    """List the available Feed.fm stations for this token's placement."""
+    params = {"client_id": client_id} if client_id else None
+    status, body = await feedfm_request("GET", "/station", request, params)
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=body)
+    stations = body.get("stations") if isinstance(body, dict) else None
+    return {"stations": stations or []}
+
+@api_router.post("/feedfm/play")
+async def feedfm_play(request: Request, client_id: str = Query(...), station_id: str = Query(...)):
+    """Request the next track for a station (Feed.fm returns ONE track at a time)."""
+    data = {"client_id": client_id, "station_id": station_id, "formats": "mp3,aac"}
+    status, body = await feedfm_request("POST", "/play", request, data)
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=body)
+    return body
+
+@api_router.post("/feedfm/play/{play_id}/{action}")
+async def feedfm_play_event(play_id: str, action: str, request: Request, client_id: str = Query(...)):
+    """Report a playback event to Feed.fm: start, complete, skip, or invalidate."""
+    if action not in ["start", "complete", "skip", "invalidate", "elapse"]:
+        raise HTTPException(status_code=400, detail="Invalid action")
+    data = {"client_id": client_id}
+    status, body = await feedfm_request("POST", f"/play/{play_id}/{action}", request, data)
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=body)
+    return body
+
 @api_router.get("/")
 async def root():
     return {"message": "Radio App API"}
+
+# Include the router in the main app
+app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,

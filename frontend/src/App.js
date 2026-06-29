@@ -12,36 +12,30 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 function App() {
-  const [spotifyToken, setSpotifyToken] = useState(null);
   const [currentView, setCurrentView] = useState('landing'); // landing, stations, create, edit, player
+  const [clientId, setClientId] = useState(null);
+  const [feedStations, setFeedStations] = useState([]);
   const [stations, setStations] = useState([]);
   const [currentStation, setCurrentStation] = useState(null);
   const [editingStation, setEditingStation] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Check for Spotify auth on mount
+  // Create a Feed.fm listener session + load catalog/stations on mount
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('spotify_auth') === 'success') {
-      fetchSpotifyToken();
-      toast.success('Successfully authenticated with Spotify!');
-      window.history.replaceState({}, '', '/');
-    }
-  }, []);
-
-  const fetchSpotifyToken = async () => {
-    try {
-      const response = await axios.get(`${API}/spotify/token`);
-      setSpotifyToken(response.data.access_token);
-      setCurrentView('stations');
-      loadStations();
-    } catch (error) {
-      console.error('Error fetching token:', error);
-      if (error.response?.status === 404) {
-        // No token, stay on landing
+    const init = async () => {
+      try {
+        const res = await axios.post(`${API}/feedfm/session`);
+        setClientId(res.data.client_id);
+        const st = await axios.get(`${API}/feedfm/stations`, { params: { client_id: res.data.client_id } });
+        setFeedStations(st.data.stations || []);
+      } catch (e) {
+        console.error('Feed.fm init failed:', e);
+        toast.error('Could not connect to the music service.');
       }
-    }
-  };
+    };
+    init();
+    loadStations();
+  }, []);
 
   const loadStations = async () => {
     try {
@@ -50,19 +44,8 @@ function App() {
       setStations(response.data);
     } catch (error) {
       console.error('Error loading stations:', error);
-      toast.error('Failed to load stations');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSpotifyLogin = async () => {
-    try {
-      const response = await axios.get(`${API}/spotify/auth`);
-      window.location.href = response.data.auth_url;
-    } catch (error) {
-      console.error('Error initiating Spotify auth:', error);
-      toast.error('Failed to connect to Spotify. Please check API credentials.');
     }
   };
 
@@ -74,7 +57,6 @@ function App() {
 
   const handleStationUpdated = (updatedStation) => {
     setStations(stations.map(s => s.id === updatedStation.id ? updatedStation : s));
-    // Keep the currently-selected station in sync so the player gets fresh data
     if (currentStation && currentStation.id === updatedStation.id) {
       setCurrentStation(updatedStation);
     }
@@ -104,33 +86,25 @@ function App() {
     }
   };
 
+  const Header = ({ children }) => (
+    <header className="app-header">
+      <div className="app-logo" data-testid="app-logo">YOURFM</div>
+      <div className="nav-buttons">{children}</div>
+    </header>
+  );
+
   const renderContent = () => {
     switch (currentView) {
       case 'landing':
-        return <LandingPage onSpotifyLogin={handleSpotifyLogin} />;
-      
+        return <LandingPage onEnter={() => setCurrentView('stations')} />;
+
       case 'stations':
         return (
           <div className="app-container">
-            <header className="app-header">
-              <div className="app-logo" data-testid="app-logo">YOURFM</div>
-              <div className="nav-buttons">
-                <button
-                  data-testid="nav-stations-btn"
-                  className="nav-button active"
-                  onClick={() => setCurrentView('stations')}
-                >
-                  My Stations
-                </button>
-                <button
-                  data-testid="nav-create-btn"
-                  className="nav-button"
-                  onClick={() => setCurrentView('create')}
-                >
-                  Create Station
-                </button>
-              </div>
-            </header>
+            <Header>
+              <button data-testid="nav-stations-btn" className="nav-button active" onClick={() => setCurrentView('stations')}>My Stations</button>
+              <button data-testid="nav-create-btn" className="nav-button" onClick={() => setCurrentView('create')}>Create Station</button>
+            </Header>
             <StationList
               stations={stations}
               onStationSelect={handleStationSelect}
@@ -140,65 +114,42 @@ function App() {
             />
           </div>
         );
-      
+
       case 'create':
         return (
           <div className="app-container">
-            <header className="app-header">
-              <div className="app-logo">YOURFM</div>
-              <div className="nav-buttons">
-                <button
-                  data-testid="back-to-stations-btn"
-                  className="nav-button"
-                  onClick={() => setCurrentView('stations')}
-                >
-                  Back to Stations
-                </button>
-              </div>
-            </header>
+            <Header>
+              <button data-testid="back-to-stations-btn" className="nav-button" onClick={() => setCurrentView('stations')}>Back to Stations</button>
+            </Header>
             <StationCreator
+              feedStations={feedStations}
               onStationCreated={handleStationCreated}
               onCancel={() => setCurrentView('stations')}
             />
           </div>
         );
-      
+
       case 'edit':
         return (
           <div className="app-container">
-            <header className="app-header">
-              <div className="app-logo">YOURFM</div>
-              <div className="nav-buttons">
-                <button
-                  data-testid="back-to-stations-btn"
-                  className="nav-button"
-                  onClick={() => {
-                    setEditingStation(null);
-                    setCurrentView('stations');
-                  }}
-                >
-                  Back to Stations
-                </button>
-              </div>
-            </header>
+            <Header>
+              <button data-testid="back-to-stations-btn" className="nav-button" onClick={() => { setEditingStation(null); setCurrentView('stations'); }}>Back to Stations</button>
+            </Header>
             <StationCreator
               station={editingStation}
+              feedStations={feedStations}
               onStationCreated={handleStationUpdated}
-              onCancel={() => {
-                setEditingStation(null);
-                setCurrentView('stations');
-              }}
+              onCancel={() => { setEditingStation(null); setCurrentView('stations'); }}
             />
           </div>
         );
-      
+
       case 'player':
-        // Player UI is rendered once, persistently, in the main return below
-        // (kept mounted to avoid re-initializing the Spotify Web Playback SDK).
+        // Rendered by the persistent player layer below
         return null;
-      
+
       default:
-        return <LandingPage onSpotifyLogin={handleSpotifyLogin} />;
+        return <LandingPage onEnter={() => setCurrentView('stations')} />;
     }
   };
 
@@ -206,30 +157,16 @@ function App() {
     <>
       <div className="App">
         {renderContent()}
-        {/* Persistent player layer: mounted once and kept alive across navigation
-            so the Spotify Web Playback SDK is never re-initialized (re-init crashes it). */}
-        {spotifyToken && currentStation && (
-          <div
-            data-testid="player-layer"
-            style={{ display: currentView === 'player' ? 'block' : 'none' }}
-          >
+        {currentStation && clientId && (
+          <div data-testid="player-layer" style={{ display: currentView === 'player' ? 'block' : 'none' }}>
             <div className="app-container">
-              <header className="app-header">
-                <div className="app-logo">YOURFM</div>
-                <div className="nav-buttons">
-                  <button
-                    data-testid="back-from-player-btn"
-                    className="nav-button"
-                    onClick={() => setCurrentView('stations')}
-                  >
-                    Back to Stations
-                  </button>
-                </div>
-              </header>
+              <Header>
+                <button data-testid="back-from-player-btn" className="nav-button" onClick={() => setCurrentView('stations')}>Back to Stations</button>
+              </Header>
               <ErrorBoundary onReset={() => setCurrentView('stations')}>
                 <Player
                   station={currentStation}
-                  spotifyToken={spotifyToken}
+                  clientId={clientId}
                   active={currentView === 'player'}
                 />
               </ErrorBoundary>

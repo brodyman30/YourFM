@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 
-const LandingPage = ({ onSpotifyLogin }) => {
+const LandingPage = ({ onEnter }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
 
@@ -135,19 +135,18 @@ const LandingPage = ({ onSpotifyLogin }) => {
           </div>
         </div>
         <p className="landing-subtitle" data-testid="landing-subtitle">
-          Create your personalized radio station with AI-powered bumpers,
-          custom voices, and your favorite Spotify tracks.
-          Experience music like never before.
+          Your own licensed radio, hosted by an AI DJ. Pick a vibe,
+          choose a voice, and let the music play. Experience radio like never before.
         </p>
         <button
-          data-testid="spotify-login-btn"
+          data-testid="start-listening-btn"
           className="cta-button"
-          onClick={onSpotifyLogin}
+          onClick={onEnter}
         >
-          <span style={{ position: 'relative', zIndex: 1 }}>Connect with Spotify</span>
+          <span style={{ position: 'relative', zIndex: 1 }}>Start Listening</span>
         </button>
         <p style={{ marginTop: '2rem', color: '#9ca3af', fontSize: '0.9rem' }}>
-          Requires Spotify Premium
+          Licensed music · No account needed
         </p>
       </div>
     </div>

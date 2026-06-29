@@ -1,808 +1,304 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Play, Pause, SkipForward, Volume2 } from 'lucide-react';
-import SpotifyPlayer from 'react-spotify-web-playback';
+import { Play, Pause, SkipForward } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+const SONGS_BEFORE_BUMPER = 3;
 
-// Tracks <audio> elements already wired to a MediaElementSourceNode.
-// An HTMLMediaElement can only be connected ONCE for its lifetime; calling
-// createMediaElementSource again (on a Player remount) throws and crashes the UI.
-const connectedAudioEls = new WeakSet();
-
-// Helper function to get user's location (uses cached location from StationCreator or falls back to IP)
-const getUserLocation = () => {
-  // Check if we have cached location (set when user selected "local weather" topic)
-  const cachedLocation = localStorage.getItem('userLocation');
-  if (cachedLocation) {
-    console.log('Using cached location:', cachedLocation);
-    return cachedLocation;
-  }
-  // Fall back to IP-based detection
-  console.log('No cached location, using IP detection');
-  return 'auto:ip';
-};
-
-const Player = ({ station, spotifyToken, active = true }) => {
-  const [tracks, setTracks] = useState([]);
-  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+const Player = ({ station, clientId, active = true }) => {
+  const [play, setPlay] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentBumper, setCurrentBumper] = useState(null);
-  const [playingBumper, setPlayingBumper] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [songsSinceLastBumper, setSongsSinceLastBumper] = useState(0);
-  const [lastProcessedTrack, setLastProcessedTrack] = useState(null);
-  const [spotifyPlayer, setSpotifyPlayer] = useState(null);
-  const [currentAlbumArt, setCurrentAlbumArt] = useState(null);
-  const [currentTrackName, setCurrentTrackName] = useState('');
-  const [playerReady, setPlayerReady] = useState(false);
-  const [playbackMovedAway, setPlaybackMovedAway] = useState(false);
-  const canvasRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
-  const dataArrayRef = useRef(null);
-  const animationRef = useRef(null);
-  const bumperAudioRef = useRef(null);
-  const lastTrackUriRef = useRef(null);
-  const isPlayingRef = useRef(true);
-  const beatPhaseRef = useRef(0);
-  const lastPositionRef = useRef(0);
-  const trackStartTimeRef = useRef(0);
-  const isLoadingTracksRef = useRef(false);
-  const loadedStationIdRef = useRef(null);
-  const spotifyPlayerRef = useRef(null);
-  const deviceIdRef = useRef(null);
-  const wasActiveHereRef = useRef(false);
+  const [bumperText, setBumperText] = useState(null);
+  const [playingBumper, setPlayingBumper] = useState(false);
+  const [songCount, setSongCount] = useState(0);
+  const [skipping, setSkipping] = useState(false);
 
-  // Pause YOURFM playback when the user navigates away from the player so it
-  // stops holding the account's single active Spotify stream.
+  const audioRef = useRef(null);
+  const bumperRef = useRef(null);
+  const startedRef = useRef({});
+  const songCountRef = useRef(0);
+  const advancingRef = useRef(false);
+  const autoplayNextRef = useRef(false);
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+
+  // Load first track when station changes
   useEffect(() => {
-    if (!active && spotifyPlayerRef.current) {
-      try {
-        spotifyPlayerRef.current.pause();
-      } catch (e) {
-        console.warn('Error pausing on navigate away:', e?.message);
-      }
+    if (!station || !clientId) return;
+    resetAndLoad();
+    return () => {
+      try { audioRef.current?.pause(); } catch (e) {}
+      try { bumperRef.current?.pause(); } catch (e) {}
+    };
+  }, [station?.id, clientId]);
+
+  // Pause when navigating away from the player
+  useEffect(() => {
+    if (!active) {
+      try { audioRef.current?.pause(); } catch (e) {}
+      try { bumperRef.current?.pause(); } catch (e) {}
     }
   }, [active]);
 
-  // Re-transfer playback back to this browser device after Spotify moved it elsewhere.
-  const resumePlaybackHere = async () => {
-    try {
-      if (deviceIdRef.current) {
-        await axios.put(
-          'https://api.spotify.com/v1/me/player',
-          { device_ids: [deviceIdRef.current], play: true },
-          { headers: { Authorization: `Bearer ${spotifyToken}` } }
-        );
-      } else if (spotifyPlayerRef.current) {
-        await spotifyPlayerRef.current.resume();
-      }
-      setPlaybackMovedAway(false);
-      toast.success('Playback resumed on YOURFM');
-    } catch (e) {
-      console.error('Resume here failed:', e);
-      toast.error('Could not resume here. Open Spotify and pick "YOURFM" as the device.');
-    }
-  };
-
-  // Disconnect the Spotify Web Playback SDK player when the Player unmounts so a
-  // remount starts clean (prevents stale SDK state on the next mount).
+  // Autoplay newly fetched track when requested
   useEffect(() => {
-    return () => {
-      try {
-        spotifyPlayerRef.current?.disconnect?.();
-      } catch (e) {
-        console.warn('Error disconnecting Spotify player:', e?.message);
-      }
-    };
-  }, []);
+    if (play && autoplayNextRef.current && audioRef.current) {
+      autoplayNextRef.current = false;
+      audioRef.current.play().catch(() => setIsPlaying(false));
+    }
+  }, [play]);
 
+  // Decorative visualizer
   useEffect(() => {
-    if (station) {
-      // Reset the loaded station ref to force fresh track loading every time
-      loadedStationIdRef.current = null;
-      loadTracks();
-      // Don't set default features - keep it null so visualizer stays static
-    }
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close().catch(() => {});
-      }
-    };
-  }, [station]);
-
-  // Initialize visualizer when canvas is ready
-  useEffect(() => {
-    if (canvasRef.current && !animationRef.current) {
-      console.log('🎨 Initializing audio visualizer');
-      initAudioVisualizer();
-    }
-  }, [canvasRef.current, tracks]);
-
-  // Poll Spotify player state to update album art
-  useEffect(() => {
-    if (!spotifyPlayer) {
-      console.log('⚠️ No Spotify player available for polling');
-      return;
-    }
-
-    console.log('✅ Starting album art polling');
-    
-    const pollInterval = setInterval(() => {
-      spotifyPlayer.getCurrentState().then(state => {
-        if (!state) {
-          console.log('⚠️ Polling: No state available');
-          return;
-        }
-        
-        const track = state.track_window?.current_track;
-        if (!track) {
-          console.log('⚠️ Polling: No current track');
-          return;
-        }
-        
-        console.log(`🔍 Polling check - Current: ${track.name}, Last: ${lastTrackUriRef.current}`);
-        
-        if (track.uri !== lastTrackUriRef.current) {
-          console.log(`🔄 TRACK CHANGED! From: ${lastTrackUriRef.current} To: ${track.uri}`);
-          lastTrackUriRef.current = track.uri;
-          
-          if (track.album?.images?.[0]?.url) {
-            const albumUrl = track.album.images[0].url;
-            console.log(`🎨 SETTING NEW ALBUM ART: ${track.name}`);
-            console.log(`🖼️ URL: ${albumUrl}`);
-            setCurrentAlbumArt(albumUrl);
-            setCurrentTrackName(track.name);
-          } else {
-            console.log('⚠️ No album art URL available');
-          }
-          
-          // Track changed - no API calls needed
-          
-          // Update track index
-          const newIndex = tracks.findIndex(t => t.uri === track.uri);
-          if (newIndex !== -1) {
-            console.log(`📍 Updating track index to: ${newIndex}`);
-            setCurrentTrackIndex(newIndex);
-          }
-        }
-      }).catch(err => console.error('❌ Error polling player state:', err));
-    }, 1000); // Poll every second
-
-    return () => {
-      console.log('🛑 Stopping album art polling');
-      clearInterval(pollInterval);
-    };
-  }, [spotifyPlayer, tracks]);
-
-  const connectAudioToVisualizer = async (playerInstance) => {
-    try {
-      console.log('🔍 Searching for Spotify audio element...');
-      
-      // Wait a bit for Spotify player to create audio element
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const audioElements = document.querySelectorAll('audio');
-      console.log(`📻 Found ${audioElements.length} audio elements`);
-      
-      let spotifyAudio = null;
-      
-      // Log all audio elements
-      audioElements.forEach((audio, index) => {
-        console.log(`Audio ${index}:`, {
-          src: audio.src,
-          currentSrc: audio.currentSrc,
-          id: audio.id,
-          className: audio.className
-        });
-      });
-      
-      // Try to find Spotify's audio element (it's usually the last one or has no src initially)
-      if (audioElements.length > 0) {
-        // Usually the last audio element is Spotify's
-        spotifyAudio = audioElements[audioElements.length - 1];
-        console.log('✅ Using audio element:', spotifyAudio);
-      }
-      
-      if (!spotifyAudio) {
-        console.log('⚠️ No audio element found, will retry in 2 seconds...');
-        setTimeout(() => connectAudioToVisualizer(playerInstance), 2000);
-        return;
-      }
-      
-      // Initialize Web Audio API
-      if (!audioContextRef.current) {
-        console.log('🎛️ Initializing Web Audio API...');
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        analyserRef.current = audioContextRef.current.createAnalyser();
-        analyserRef.current.fftSize = 512;
-        analyserRef.current.smoothingTimeConstant = 0.75;
-        dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
-        
-        console.log('🔌 Connecting audio source...');
-        
-        // Connect audio element to analyser — guard against double-connect across
-        // Player remounts (createMediaElementSource throws if already connected).
-        if (!connectedAudioEls.has(spotifyAudio)) {
-          try {
-            const source = audioContextRef.current.createMediaElementSource(spotifyAudio);
-            source.connect(analyserRef.current);
-            analyserRef.current.connect(audioContextRef.current.destination);
-            connectedAudioEls.add(spotifyAudio);
-            console.log('🎵 Audio visualizer connected to Spotify playback!');
-          } catch (e) {
-            console.warn('Audio element already connected; skipping visualizer hookup:', e.message);
-          }
-        } else {
-          console.log('Audio element already connected in a previous mount; skipping');
-        }
-        console.log('📊 Analyser config:', {
-          fftSize: analyserRef.current.fftSize,
-          frequencyBinCount: analyserRef.current.frequencyBinCount,
-          smoothingTimeConstant: analyserRef.current.smoothingTimeConstant
-        });
-      }
-    } catch (error) {
-      console.error('❌ Error connecting audio to visualizer:', error);
-      console.log('Error details:', error.message);
-      console.log('Falling back to simulation mode');
-    }
-  };
-
-  const loadTracks = async () => {
-    // Prevent duplicate loading while a request is in progress
-    if (isLoadingTracksRef.current) {
-      console.log('⏭️ Already loading tracks, skipping duplicate request');
-      return;
-    }
-    
-    try {
-      isLoadingTracksRef.current = true;
-      setLoading(true);
-      
-      // First, pause any existing Spotify playback to prevent interference
-      console.log('⏸️ Pausing any existing Spotify playback...');
-      try {
-        await axios.put(
-          'https://api.spotify.com/v1/me/player/pause',
-          {},
-          { headers: { 'Authorization': `Bearer ${spotifyToken}` } }
-        );
-      } catch (pauseError) {
-        // It's okay if this fails (might not be playing)
-        console.log('Note: Could not pause existing playback (may not be active)');
-      }
-      
-      console.log(`🎵 Loading fresh randomized tracks for station: ${station.name}`);
-      
-      const response = await axios.post(
-        `${API}/spotify/tracks`,
-        { 
-          artists: station.artists,
-          genres: station.genres || (station.genre ? [station.genre] : [])
-        }
-      );
-      
-      console.log(`✅ Loaded ${response.data.tracks.length} tracks (80% discovery, 20% selected artists)`);
-      setTracks(response.data.tracks);
-      setCurrentTrackIndex(0);
-      loadedStationIdRef.current = station.id;
-      
-      // Reset playback state
-      setIsPlaying(false);
-      lastTrackUriRef.current = null; // Reset to ensure fresh start
-      
-    } catch (error) {
-      console.error('Error loading tracks:', error);
-      toast.error('Failed to load tracks');
-    } finally {
-      setLoading(false);
-      isLoadingTracksRef.current = false;
-    }
-  };
-
-  const initAudioVisualizer = async () => {
     const canvas = canvasRef.current;
-    if (!canvas) {
-      console.log('❌ Canvas not available');
-      return;
-    }
-
-    console.log('✅ Canvas found, initializing visualizer');
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
-    // Set canvas size based on parent
-    const updateCanvasSize = () => {
-      const parent = canvas.parentElement;
-      if (parent) {
-        canvas.width = parent.offsetWidth;
-        canvas.height = parent.offsetHeight;
-        console.log(`📏 Canvas size: ${canvas.width}x${canvas.height}`);
-      }
-    };
-    
-    updateCanvasSize();
-
-    let time = 0;
-
-    // Smooth layered wave visualizer
+    canvas.width = 600;
+    canvas.height = 120;
+    let t = 0;
     const animate = () => {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (isPlayingRef.current) {
-        time += 0.01; // Slow, smooth animation
-        
-        const centerY = canvas.height / 2;
-        const waves = [
-          // Wave layers (color, amplitude, frequency, phase, lineWidth)
-          { color: 'rgba(139, 92, 246, 0.3)', amplitude: 40, frequency: 0.015, phase: 0, lineWidth: 8 },      // Purple outer
-          { color: 'rgba(167, 139, 250, 0.5)', amplitude: 35, frequency: 0.018, phase: 0.5, lineWidth: 6 },   // Light purple
-          { color: 'rgba(251, 191, 36, 0.6)', amplitude: 30, frequency: 0.02, phase: 1, lineWidth: 5 },       // Yellow
-          { color: 'rgba(251, 191, 36, 0.9)', amplitude: 25, frequency: 0.022, phase: 1.5, lineWidth: 3 }     // Bright yellow inner
-        ];
-
-        // Draw each wave layer
-        waves.forEach(wave => {
-          ctx.beginPath();
-          ctx.strokeStyle = wave.color;
-          ctx.lineWidth = wave.lineWidth;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-
-          // Draw smooth sine wave across canvas
-          for (let x = 0; x <= canvas.width; x += 2) {
-            // Multiple sine waves for organic feel
-            const y1 = Math.sin(x * wave.frequency + time + wave.phase) * wave.amplitude;
-            const y2 = Math.sin(x * wave.frequency * 1.5 - time * 0.8 + wave.phase) * (wave.amplitude * 0.5);
-            const y3 = Math.sin(x * wave.frequency * 0.7 + time * 1.2 + wave.phase) * (wave.amplitude * 0.3);
-            
-            const y = centerY + y1 + y2 + y3;
-            
-            if (x === 0) {
-              ctx.moveTo(x, y);
-            } else {
-              ctx.lineTo(x, y);
-            }
-          }
-
-          ctx.stroke();
-
-          // Add glow effect
-          ctx.shadowBlur = 15;
-          ctx.shadowColor = wave.color;
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-        });
-
-      } else {
-        // Static flat line when paused
-        ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
-        ctx.lineWidth = 4;
+      const speed = isPlaying || playingBumper ? 0.05 : 0.012;
+      t += speed;
+      const cy = canvas.height / 2;
+      const layers = [
+        { c: 'rgba(139,92,246,0.25)', a: 28, f: 0.02, p: 0, w: 8 },
+        { c: 'rgba(251,191,36,0.5)', a: 22, f: 0.03, p: 1, w: 4 },
+        { c: 'rgba(251,191,36,0.85)', a: 14, f: 0.035, p: 1.5, w: 2 }
+      ];
+      layers.forEach((L) => {
         ctx.beginPath();
-        ctx.moveTo(0, canvas.height / 2);
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
-      }
-
-      animationRef.current = requestAnimationFrame(animate);
-    };
-
-    console.log('🎬 Starting smooth wave animation');
-    animate();
-  };
-
-  const generateAndPlayBumper = async (trackInfo = null, nextTrackInfo = null) => {
-    // Prevent multiple simultaneous bumper generations
-    if (playingBumper) {
-      console.log('Bumper already playing, skipping');
-      return;
-    }
-    
-    try {
-      console.log('Starting bumper generation (volume already ducked)...');
-      setPlayingBumper(true);
-      
-      // Use provided track info or current track
-      const trackToReference = trackInfo || currentTrack;
-      
-      console.log('🎙️ Generating bumper for track:', trackToReference?.name, 'by', trackToReference?.artist);
-      console.log('🎙️ Next track will be:', nextTrackInfo?.name, 'by', nextTrackInfo?.artist);
-      console.log('Station topics:', station.bumper_topics);
-      
-      // Get user location (from cache set when "local weather" was selected, or fallback to IP)
-      const userLocation = getUserLocation();
-      console.log('User location for weather:', userLocation);
-      
-      const requestData = {
-        station_id: station.id,
-        topics: station.bumper_topics || [],
-        genres: station.genres || (station.genre ? [station.genre] : []),
-        artists: station.artists,
-        voice_id: station.voice_id,
-        current_track_name: trackToReference?.name || '',
-        current_track_artist: trackToReference?.artist || '',
-        next_track_name: nextTrackInfo?.name || '',
-        next_track_artist: nextTrackInfo?.artist || '',
-        user_location: userLocation
-      };
-      
-      console.log('Bumper request data:', requestData);
-      
-      const response = await axios.post(`${API}/bumpers/generate`, requestData);
-
-      setCurrentBumper(response.data);
-
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Play bumper voice over ducked music
-      if (bumperAudioRef.current) {
-        bumperAudioRef.current.src = response.data.audio_url;
-        bumperAudioRef.current.volume = 1.0; // Full volume for voice
-        bumperAudioRef.current.load();
-        await bumperAudioRef.current.play();
-      }
-    } catch (error) {
-      console.error('Error generating bumper:', error);
-      toast.error('Failed to generate bumper');
-      setPlayingBumper(false);
-      // Restore Spotify volume on error
-      if (spotifyPlayer) {
-        spotifyPlayer.setVolume(1.0);
-      }
-    }
-  };
-
-  const handleBumperEnded = () => {
-    console.log('Bumper ended - fading Spotify back up');
-    setPlayingBumper(false);
-    setCurrentBumper(null);
-    
-    // Fade Spotify volume back up from 15% to 100%
-    if (spotifyPlayer) {
-      let currentVolume = 0.15;
-      const fadeUp = setInterval(() => {
-        currentVolume += 0.08;
-        if (currentVolume >= 1.0) {
-          currentVolume = 1.0;
-          clearInterval(fadeUp);
-          console.log('✓ Spotify volume fully restored');
+        ctx.strokeStyle = L.c;
+        ctx.lineWidth = L.w;
+        ctx.lineCap = 'round';
+        for (let x = 0; x <= canvas.width; x += 3) {
+          const y = cy + Math.sin(x * L.f + t + L.p) * L.a + Math.sin(x * L.f * 1.5 - t * 0.8) * (L.a * 0.4);
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
-        spotifyPlayer.setVolume(currentVolume);
-        console.log('🎚️ Fading up to:', currentVolume.toFixed(2));
-      }, 100); // Fade up over ~1 second
-    } else {
-      console.log('⚠️ No Spotify player reference available');
-    }
+        ctx.stroke();
+      });
+      animRef.current = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => animRef.current && cancelAnimationFrame(animRef.current);
+  }, [isPlaying, playingBumper]);
+
+  const resetAndLoad = async () => {
+    setLoading(true);
+    setPlay(null);
+    setBumperText(null);
+    setPlayingBumper(false);
+    setSongCount(0);
+    songCountRef.current = 0;
+    startedRef.current = {};
+    await fetchTrack(false);
+    setLoading(false);
   };
 
-  const handleSpotifyStateChange = (state) => {
-    if (!state) return;
-
-    // When track ends, play bumper then next track
-    if (state.position === 0 && state.previousTracks.length > currentTrackIndex) {
-      setCurrentTrackIndex(prev => prev + 1);
-      if (station.bumper_topics.length > 0) {
-        generateAndPlayBumper();
+  const fetchTrack = async (autoplay) => {
+    try {
+      const res = await axios.post(`${API}/feedfm/play`, null, {
+        params: { client_id: clientId, station_id: station.feedfm_station_id }
+      });
+      if (!res.data || res.data.success === false || !res.data.play) {
+        toast.info('No more music available on this station right now.');
+        return null;
       }
+      autoplayNextRef.current = !!autoplay;
+      setPlay(res.data.play);
+      return res.data.play;
+    } catch (e) {
+      console.error('fetchTrack error:', e);
+      toast.error('Could not load the next track.');
+      return null;
     }
   };
 
-  const shouldPlayBumper = () => {
-    // Play bumper every 3-4 songs (randomized)
-    const songsBeforeBumper = Math.floor(Math.random() * 2) + 3; // 3 or 4
-    return songsSinceLastBumper >= songsBeforeBumper && station.bumper_topics.length > 0;
+  const reportEvent = async (playId, action) => {
+    try {
+      await axios.post(`${API}/feedfm/play/${playId}/${action}`, null, { params: { client_id: clientId } });
+    } catch (e) { /* non-fatal */ }
   };
 
-  if (loading && tracks.length === 0) {
+  const handleAudioPlay = () => {
+    setIsPlaying(true);
+    if (play && !startedRef.current[play.id]) {
+      startedRef.current[play.id] = true;
+      reportEvent(play.id, 'start');
+    }
+  };
+
+  const handleAudioEnded = async () => {
+    if (!play || advancingRef.current) return;
+    advancingRef.current = true;
+    const finished = play;
+    await reportEvent(finished.id, 'complete');
+
+    const newCount = songCountRef.current + 1;
+    songCountRef.current = newCount;
+    setSongCount(newCount);
+
+    const shouldBumper = station.bumper_topics && station.bumper_topics.length > 0 && newCount >= SONGS_BEFORE_BUMPER;
+    if (shouldBumper) {
+      songCountRef.current = 0;
+      setSongCount(0);
+      await playBumper(finished);
+    }
+    await fetchTrack(true);
+    advancingRef.current = false;
+  };
+
+  const playBumper = async (finishedPlay) => {
+    try {
+      const af = finishedPlay.audio_file || {};
+      setPlayingBumper(true);
+      const res = await axios.post(`${API}/bumpers/generate`, {
+        station_id: station.id,
+        topics: station.bumper_topics,
+        genres: station.genres && station.genres.length ? station.genres : (station.feedfm_station_name ? [station.feedfm_station_name] : []),
+        artists: [],
+        voice_id: station.voice_id,
+        current_track_name: af.track?.title || '',
+        current_track_artist: af.artist?.name || ''
+      });
+      setBumperText(res.data.text);
+      const audioUrl = res.data.audio_url;
+      if (audioUrl && bumperRef.current) {
+        await new Promise((resolve) => {
+          const b = bumperRef.current;
+          b.src = audioUrl;
+          b.onended = resolve;
+          b.onerror = resolve;
+          b.play().catch(resolve);
+        });
+      }
+    } catch (e) {
+      console.error('Bumper error:', e);
+    } finally {
+      setPlayingBumper(false);
+      setBumperText(null);
+    }
+  };
+
+  const togglePlay = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) a.play().catch(() => {}); else a.pause();
+  };
+
+  const handleSkip = async () => {
+    if (!play || skipping || playingBumper) return;
+    setSkipping(true);
+    try {
+      const res = await axios.post(`${API}/feedfm/play/${play.id}/skip`, null, { params: { client_id: clientId } });
+      if (res.data && res.data.success === false) {
+        toast.info('Skip not allowed right now (radio rules).');
+      } else {
+        await fetchTrack(true);
+      }
+    } catch (e) {
+      toast.info('Skip limit reached for now.');
+    } finally {
+      setSkipping(false);
+    }
+  };
+
+  if (loading) {
     return <div className="spinner" data-testid="player-loading"></div>;
   }
 
-  if (tracks.length === 0) {
-    return (
-      <div className="text-center" style={{ marginTop: '4rem' }}>
-        <h2 style={{ color: '#FBBF24', fontSize: '2rem' }}>No tracks found</h2>
-        <p style={{ color: '#9ca3af' }}>Unable to load tracks for this station</p>
-      </div>
-    );
-  }
-
-  const currentTrack = tracks[currentTrackIndex];
+  const af = play?.audio_file || {};
+  const albumArt = af.extra?.artwork || af.extra?.image || af.extra?.background_image_url || null;
+  const title = af.track?.title || 'Unknown';
+  const artistName = af.artist?.name || '';
+  const albumName = af.release?.title || '';
 
   return (
     <div className="player-container" data-testid="player-container">
       <div className="player-glow"></div>
 
-      {/* Device hand-off banner: shown when Spotify moves playback to another device */}
-      {playbackMovedAway && (
-        <div
-          data-testid="playback-moved-banner"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '1rem',
-            background: 'rgba(251, 191, 36, 0.12)',
-            border: '2px solid rgba(251, 191, 36, 0.5)',
-            borderRadius: '12px',
-            padding: '0.9rem 1.2rem',
-            marginBottom: '1.5rem'
-          }}
-        >
-          <span style={{ color: '#FBBF24', fontSize: '0.95rem', fontWeight: 600 }}>
-            Playback moved to another Spotify device.
-          </span>
+      <audio
+        ref={audioRef}
+        src={play?.audio_file?.url}
+        onPlay={handleAudioPlay}
+        onPause={() => setIsPlaying(false)}
+        onEnded={handleAudioEnded}
+        data-testid="music-audio"
+      />
+      <audio ref={bumperRef} data-testid="bumper-audio" />
+
+      {/* Now playing card */}
+      <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto' }} data-testid="now-playing">
+        <div style={{
+          fontSize: '0.8rem', letterSpacing: '0.2em', color: '#8B5CF6',
+          textTransform: 'uppercase', marginBottom: '0.75rem', fontWeight: 700
+        }}>
+          {station.name} · {station.feedfm_station_name}
+        </div>
+
+        <div style={{
+          width: '260px', height: '260px', margin: '0 auto 1.5rem',
+          borderRadius: '20px', overflow: 'hidden',
+          background: albumArt ? `url(${albumArt}) center/cover` : 'linear-gradient(135deg, #8B5CF6, #FBBF24)',
+          boxShadow: '0 0 60px rgba(251,191,36,0.25)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }} data-testid="album-art">
+          {!albumArt && <span style={{ fontSize: '4rem' }}>🎵</span>}
+        </div>
+
+        {playingBumper && (
+          <div data-testid="bumper-banner" style={{
+            background: 'rgba(251,191,36,0.12)', border: '2px solid rgba(251,191,36,0.5)',
+            borderRadius: '12px', padding: '0.9rem 1.2rem', marginBottom: '1.25rem', color: '#FBBF24'
+          }}>
+            <strong>🎙️ Your DJ is on the air…</strong>
+            {bumperText && <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#fde68a' }}>{bumperText}</div>}
+          </div>
+        )}
+
+        <h2 style={{ color: '#FBBF24', fontSize: '1.8rem', margin: '0 0 0.4rem' }} data-testid="track-title">{title}</h2>
+        <p style={{ color: '#e5e7eb', fontSize: '1.1rem', margin: '0 0 0.2rem' }} data-testid="track-artist">{artistName}</p>
+        {albumName && <p style={{ color: '#9ca3af', fontSize: '0.9rem', margin: 0 }}>{albumName}</p>}
+
+        <canvas ref={canvasRef} style={{ width: '100%', height: '120px', margin: '1.5rem 0' }} />
+
+        {/* Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.5rem' }}>
           <button
-            data-testid="resume-here-btn"
-            onClick={resumePlaybackHere}
+            data-testid="play-pause-btn"
+            onClick={togglePlay}
+            disabled={playingBumper}
             style={{
-              background: '#FBBF24',
-              color: '#1a1a1a',
-              border: 'none',
-              padding: '0.6rem 1.4rem',
-              borderRadius: '999px',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '0.9rem'
+              width: '72px', height: '72px', borderRadius: '50%', border: 'none',
+              background: '#FBBF24', color: '#1a1a1a', cursor: playingBumper ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 0 30px rgba(251,191,36,0.5)', opacity: playingBumper ? 0.5 : 1
             }}
           >
-            Resume on YOURFM
+            {isPlaying ? <Pause size={32} fill="#1a1a1a" /> : <Play size={32} fill="#1a1a1a" />}
+          </button>
+          <button
+            data-testid="skip-btn"
+            onClick={handleSkip}
+            disabled={skipping || playingBumper}
+            style={{
+              width: '56px', height: '56px', borderRadius: '50%',
+              border: '2px solid rgba(251,191,36,0.5)', background: 'transparent', color: '#FBBF24',
+              cursor: (skipping || playingBumper) ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+          >
+            <SkipForward size={24} />
           </button>
         </div>
-      )}
-
-      {/* Visualizer with Album Art */}
-      <div style={{ 
-        width: '100%', 
-        height: '400px', 
-        borderRadius: '15px', 
-        background: 'rgba(0, 0, 0, 0.3)',
-        marginBottom: '2rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        {/* Audio Visualizer Canvas */}
-        <canvas
-          ref={canvasRef}
-          data-testid="audio-visualizer"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            zIndex: 1,
-            display: 'block'
-          }}
-        />
-        
-        {/* Album Art on top */}
-        {(currentAlbumArt || currentTrack?.image) && (
-          <img 
-            key={currentAlbumArt || currentTrack?.uri}
-            src={currentAlbumArt || currentTrack?.image} 
-            alt={currentTrackName || currentTrack?.name || 'Album Art'}
-            data-testid="album-art"
-            style={{
-              width: '280px',
-              height: '280px',
-              borderRadius: '12px',
-              objectFit: 'cover',
-              boxShadow: '0 20px 60px rgba(139, 92, 246, 0.6), 0 0 80px rgba(251, 191, 36, 0.3)',
-              border: '3px solid rgba(251, 191, 36, 0.4)',
-              position: 'relative',
-              zIndex: 2,
-              transition: 'all 0.5s ease'
-            }}
-          />
-        )}
-      </div>
-
-      <div className="player-controls">
-
-        {/* Playback info - controls handled by Spotify player below */}
-        <div style={{ textAlign: 'center', color: '#FBBF24', fontSize: '0.9rem', marginTop: '1rem' }}>
-          {playingBumper ? 'Bumper playing...' : 'Use the player controls below to play, pause, and skip tracks'}
-        </div>
-
-        {/* Spotify Player */}
-        <div style={{ marginTop: '2rem', visibility: playingBumper ? 'hidden' : 'visible' }} data-testid="spotify-player-container">
-          {spotifyToken && tracks.length > 0 && currentTrack && (
-            <SpotifyPlayer
-              key="yourfm-spotify-player"
-              token={spotifyToken}
-              uris={tracks.map(t => t.uri)}
-              play={isPlaying}
-              initialVolume={100}
-              syncExternalDevice={false}
-              getPlayer={(player) => {
-                if (player && !spotifyPlayer) {
-                  console.log('✓ Spotify player instance captured');
-                  setSpotifyPlayer(player);
-                  spotifyPlayerRef.current = player;
-                  setPlayerReady(true);
-                  
-                  // Force transfer playback to this device when ready
-                  player.addListener('ready', async ({ device_id }) => {
-                    console.log('🎧 Spotify device ready:', device_id);
-                    deviceIdRef.current = device_id;
-                    // Transfer playback to this device
-                    try {
-                      await axios.put(
-                        'https://api.spotify.com/v1/me/player',
-                        { device_ids: [device_id], play: false },
-                        { headers: { 'Authorization': `Bearer ${spotifyToken}` } }
-                      );
-                      console.log('✅ Playback transferred to this device');
-                    } catch (transferError) {
-                      console.log('Note: Transfer playback attempt:', transferError.message);
-                    }
-                  });
-                  
-                  // Try to connect audio visualizer to Spotify player
-                  if (player._player) {
-                    connectAudioToVisualizer(player._player);
-                  }
-                }
-              }}
-              callback={(state) => {
-                if (!state) {
-                  return;
-                }
-                
-                const playing = !!state.isPlaying;
-                setIsPlaying(playing);
-                isPlayingRef.current = playing;
-                
-                // Detect when Spotify moved playback to another device (an account can
-                // only stream on one device at a time). Only flag a hand-off if playback
-                // was actually active HERE first (avoids false positives during SDK handshake).
-                if (state.isActive === true) {
-                  wasActiveHereRef.current = true;
-                  setPlaybackMovedAway((prev) => (prev ? false : prev));
-                } else if (state.isActive === false && wasActiveHereRef.current) {
-                  setPlaybackMovedAway(true);
-                }
-                
-                // ALWAYS update current track display and album art when available
-                if (state.track_window?.current_track) {
-                  const spotifyTrack = state.track_window.current_track;
-                  const currentUri = spotifyTrack.uri;
-                  
-                  // Check if this track is in our playlist
-                  const isOurTrack = tracks.some(t => t.uri === currentUri);
-                  
-                  if (!isOurTrack && tracks.length > 0) {
-                    // This track isn't from our station - it's from somewhere else!
-                    console.log('⚠️ Playing track not in our playlist, skipping to our first track...');
-                    // Don't update state for external tracks
-                    return;
-                  }
-                  
-                  // Check if track actually changed using ref
-                  if (lastTrackUriRef.current !== currentUri) {
-                    console.log(`🎵 Track changed! Old: ${lastTrackUriRef.current}, New: ${currentUri}`);
-                    lastTrackUriRef.current = currentUri;
-                    
-                    // Update album art directly from Spotify's state
-                    if (spotifyTrack.album?.images?.[0]?.url) {
-                      const newAlbumArt = spotifyTrack.album.images[0].url;
-                      const newTrackName = spotifyTrack.name;
-                      
-                      console.log(`🎨 UPDATING Album art for: ${newTrackName}`);
-                      console.log(`🖼️ New album art URL: ${newAlbumArt.substring(0, 50)}...`);
-                      setCurrentAlbumArt(newAlbumArt);
-                      setCurrentTrackName(newTrackName);
-                    }
-                    
-                    // Also update track index for other functionality
-                    const newIndex = tracks.findIndex(t => t.uri === currentUri);
-                    if (newIndex !== -1) {
-                      console.log(`📍 Track index updated to ${newIndex}: ${tracks[newIndex]?.name}`);
-                      setCurrentTrackIndex(newIndex);
-                    } else {
-                      // If track not found in our list, update by name match as fallback
-                      const trackByName = tracks.findIndex(t => 
-                        t.name === spotifyTrack.name && 
-                        t.artist === spotifyTrack.artists[0]?.name
-                      );
-                      if (trackByName !== -1) {
-                        console.log(`📍 Track index updated by name match to ${trackByName}`);
-                        setCurrentTrackIndex(trackByName);
-                      }
-                    }
-                  }
-                }
-                
-                // Check if track ended (position is 0 and we just finished playing)
-                if (state.position === 0 && state.previousTracks && state.previousTracks.length > 0 && !playingBumper) {
-                  const justFinished = state.previousTracks[state.previousTracks.length - 1];
-                  
-                  // Prevent duplicate processing of the same track
-                  if (lastProcessedTrack === justFinished?.uri) {
-                    return;
-                  }
-                  
-                  console.log('Track ended:', justFinished?.name);
-                  setLastProcessedTrack(justFinished?.uri);
-                  
-                  // Increment song counter
-                  const newCount = songsSinceLastBumper + 1;
-                  setSongsSinceLastBumper(newCount);
-                  console.log(`Song count: ${newCount} (trigger at 3)`);
-                  const songsBeforeBumper = 3;
-                  
-                  // Derive tracks DIRECTLY from Spotify's real playback state so the
-                  // announcement always matches what the listener actually heard / hears.
-                  const finishedTrack = justFinished ? {
-                    uri: justFinished.uri,
-                    name: justFinished.name,
-                    artist: justFinished.artists?.[0]?.name || ''
-                  } : null;
-                  
-                  // The track Spotify is playing NOW is what plays under/after the bumper = "coming up next".
-                  // In react-spotify-web-playback's callback state this is `state.track`.
-                  const spotifyCurrentTrack = state.track;
-                  const nextTrack = (spotifyCurrentTrack && spotifyCurrentTrack.uri) ? {
-                    uri: spotifyCurrentTrack.uri,
-                    name: spotifyCurrentTrack.name,
-                    artist: spotifyCurrentTrack.artists?.[0]?.name || ''
-                  } : null;
-                  
-                  if (newCount >= songsBeforeBumper && station.bumper_topics?.length > 0 && finishedTrack) {
-                    console.log(`🎙️ TRIGGERING BUMPER after ${newCount} songs`);
-                    console.log('Just played (Spotify state):', finishedTrack.name, 'by', finishedTrack.artist);
-                    console.log('Now playing / up next (Spotify state):', nextTrack?.name, 'by', nextTrack?.artist);
-                    setSongsSinceLastBumper(0); // Reset counter immediately
-                    
-                    // Capture track info IMMEDIATELY to prevent race conditions
-                    // Use our tracked list, not Spotify's state
-                    const capturedFinishedTrack = { ...finishedTrack };
-                    const capturedNextTrack = nextTrack ? { ...nextTrack } : null;
-                    
-                    // Duck volume IMMEDIATELY before any delay
-                    if (spotifyPlayer) {
-                      console.log('🎚️ Ducking volume immediately');
-                      spotifyPlayer.setVolume(0.15);
-                    }
-                    
-                    // Pass captured track info to prevent wrong songs in bumper
-                    setTimeout(() => generateAndPlayBumper(capturedFinishedTrack, capturedNextTrack), 500);
-                  } else {
-                    console.log(`Waiting... count=${newCount}, topics=${station.bumper_topics?.length}`);
-                  }
-                }
-              }}
-              styles={{
-                bgColor: 'rgba(139, 92, 246, 0.1)',
-                color: '#FBBF24',
-                loaderColor: '#FBBF24',
-                sliderColor: '#FBBF24',
-                trackArtistColor: '#FBBF24',
-                trackNameColor: '#FBBF24',
-              }}
-            />
-          )}
-        </div>
-
-        {/* Hidden audio element for bumpers */}
-        <audio
-          ref={bumperAudioRef}
-          onEnded={handleBumperEnded}
-          data-testid="bumper-audio"
-          style={{ display: 'none' }}
-        />
+        <p style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '1.25rem' }} data-testid="song-count">
+          {station.bumper_topics && station.bumper_topics.length > 0
+            ? `DJ break in ${Math.max(0, SONGS_BEFORE_BUMPER - songCount)} song(s)`
+            : 'AI DJ breaks off'}
+        </p>
       </div>
     </div>
   );

@@ -42,10 +42,12 @@ const StationList = ({ stations, onStationSelect, onDeleteStation, onEditStation
                 {station.name}
               </h3>
               <p className="station-genre" data-testid={`station-genre-${station.id}`}>
-                {station.genres ? station.genres.join(' • ') : station.genre}
+                {station.feedfm_station_name || (station.genres ? station.genres.join(' • ') : station.genre)}
               </p>
               <p className="station-artists" data-testid={`station-artists-${station.id}`}>
-                {station.artists.map(a => typeof a === 'string' ? a : a.name).join(', ')}
+                {station.bumper_topics && station.bumper_topics.length > 0
+                  ? `DJ topics: ${station.bumper_topics.join(', ')}`
+                  : 'AI DJ ready'}
               </p>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
