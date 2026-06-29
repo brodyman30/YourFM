@@ -192,11 +192,18 @@ const Player = ({ station, clientId, active = true }) => {
   const handleSkip = async () => {
     if (!play || skipping || playingBumper) return;
     setSkipping(true);
+    const skipped = play;
     try {
       const res = await axios.post(`${API}/feedfm/play/${play.id}/skip`, null, { params: { client_id: clientId } });
       if (res.data && res.data.success === false) {
         toast.info('Skip not allowed right now (radio rules).');
       } else {
+        // Let the DJ talk after a skip too
+        if (station.bumper_topics && station.bumper_topics.length > 0) {
+          songCountRef.current = 0;
+          setSongCount(0);
+          await playBumper(skipped);
+        }
         await fetchTrack(true);
       }
     } catch (e) {
