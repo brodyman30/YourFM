@@ -5,6 +5,7 @@ import LandingPage from "./components/LandingPage";
 import StationCreator from "./components/StationCreator";
 import StationList from "./components/StationList";
 import Player from "./components/Player";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { Toaster, toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -73,6 +74,10 @@ function App() {
 
   const handleStationUpdated = (updatedStation) => {
     setStations(stations.map(s => s.id === updatedStation.id ? updatedStation : s));
+    // Keep the currently-selected station in sync so the player gets fresh data
+    if (currentStation && currentStation.id === updatedStation.id) {
+      setCurrentStation(updatedStation);
+    }
     setEditingStation(null);
     setCurrentView('stations');
     toast.success(`Station "${updatedStation.name}" updated!`);
@@ -202,10 +207,12 @@ function App() {
                 </button>
               </div>
             </header>
-            <Player
-              station={currentStation}
-              spotifyToken={spotifyToken}
-            />
+            <ErrorBoundary onReset={() => setCurrentView('stations')}>
+              <Player
+                station={currentStation}
+                spotifyToken={spotifyToken}
+              />
+            </ErrorBoundary>
           </div>
         );
       

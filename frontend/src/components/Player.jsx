@@ -7,6 +7,11 @@ import SpotifyPlayer from 'react-spotify-web-playback';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Tracks <audio> elements already wired to a MediaElementSourceNode.
+// An HTMLMediaElement can only be connected ONCE for its lifetime; calling
+// createMediaElementSource again (on a Player remount) throws and crashes the UI.
+const connectedAudioEls = new WeakSet();
+
 // Helper function to get user's location (uses cached location from StationCreator or falls back to IP)
 const getUserLocation = () => {
   // Check if we have cached location (set when user selected "local weather" topic)
@@ -46,6 +51,19 @@ const Player = ({ station, spotifyToken }) => {
   const trackStartTimeRef = useRef(0);
   const isLoadingTracksRef = useRef(false);
   const loadedStationIdRef = useRef(null);
+  const spotifyPlayerRef = useRef(null);
+
+  // Disconnect the Spotify Web Playback SDK player when the Player unmounts so a
+  // remount starts clean (prevents stale SDK state on the next mount).
+  useEffect(() => {
+    return () => {
+      try {
+        spotifyPlayerRef.current?.disconnect?.();
+      } catch (e) {
+        console.warn('Error disconnecting Spotify player:', e?.message);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (station) {
@@ -59,8 +77,8 @@ const Player = ({ station, spotifyToken }) => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {});
       }
     };
   }, [station]);
@@ -175,12 +193,21 @@ const Player = ({ station, spotifyToken }) => {
         
         console.log('🔌 Connecting audio source...');
         
-        // Connect audio element to analyser
-        const source = audioContextRef.current.createMediaElementSource(spotifyAudio);
-        source.connect(analyserRef.current);
-        analyserRef.current.connect(audioContextRef.current.destination);
-        
-        console.log('🎵 Audio visualizer connected to Spotify playback!');
+        // Connect audio element to analyser — guard against double-connect across
+        // Player remounts (createMediaElementSource throws if already connected).
+        if (!connectedAudioEls.has(spotifyAudio)) {
+          try {
+            const source = audioContextRef.current.createMediaElementSource(spotifyAudio);
+            source.connect(analyserRef.current);
+            analyserRef.current.connect(audioContextRef.current.destination);
+            connectedAudioEls.add(spotifyAudio);
+            console.log('🎵 Audio visualizer connected to Spotify playback!');
+          } catch (e) {
+            console.warn('Audio element already connected; skipping visualizer hookup:', e.message);
+          }
+        } else {
+          console.log('Audio element already connected in a previous mount; skipping');
+        }
         console.log('📊 Analyser config:', {
           fftSize: analyserRef.current.fftSize,
           frequencyBinCount: analyserRef.current.frequencyBinCount,
@@ -529,6 +556,7 @@ const Player = ({ station, spotifyToken }) => {
                 if (player && !spotifyPlayer) {
                   console.log('✓ Spotify player instance captured');
                   setSpotifyPlayer(player);
+                  spotifyPlayerRef.current = player;
                   setPlayerReady(true);
                   
                   // Force transfer playback to this device when ready
