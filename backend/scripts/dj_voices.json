@@ -1,50 +1,74 @@
 [
   {
-    "voice_id": "SFLy8KPQaTeMd5DxmOmd",
-    "name": "Jaxon \u2014 Top-40 Hype",
-    "description": "A high-energy American male Top-40 morning radio DJ in his early 30s, bright, fast-paced, charismatic and upbeat with natural breaths and lively inflection.",
-    "vibe": "Top 40"
+    "voice_id": "0xDJFYYJsXzkI1tnTGpW",
+    "name": "Johnny \u2014 Top-40 Hype",
+    "description": "Genuinely high-energy Top-40 hype host \u2014 upbeat, excited, still conversational. Mid-30s American male.",
+    "vibe": "Top 40",
+    "model": "eleven_turbo_v2_5",
+    "settings": {"stability": 0.75, "similarity_boost": 0.55, "style": 0.0, "use_speaker_boost": false, "speed": 0.96}
+  },
+  {
+    "voice_id": "jjPWyIS2ybPXJL6blCvY",
+    "name": "Jaxon \u2014 Top-40 Energy",
+    "description": "Mid-30s energetic Top-40 host \u2014 upbeat and excited but conversational, not over the top.",
+    "vibe": "Top 40",
+    "model": "eleven_turbo_v2_5",
+    "settings": {"stability": 0.85, "similarity_boost": 0.45, "style": 0.0, "use_speaker_boost": false, "speed": 0.95}
   },
   {
     "voice_id": "9c8VzCq2zlhwrVFJPt3U",
     "name": "Mia \u2014 Pop Energy",
     "description": "A bubbly American female pop radio host in her mid 20s, playful, enthusiastic, warm and fun with a modern upbeat delivery.",
-    "vibe": "Top 40"
+    "vibe": "Top 40",
+    "model": "eleven_v3",
+    "settings": {"stability": 0.6, "similarity_boost": 0.7, "style": 0.3, "use_speaker_boost": true}
   },
   {
     "voice_id": "QRzSOQsyy2H3xOQE8rk5",
     "name": "Cole \u2014 Lofi Mellow",
     "description": "A smooth chill lo-fi radio host, soft-spoken American male in his late 20s, mellow, relaxed and intimate with a calm late-night cadence.",
-    "vibe": "Chill Lofi"
+    "vibe": "Chill Lofi",
+    "model": "eleven_v3",
+    "settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": true}
   },
   {
     "voice_id": "sVPIwFSChJOLXAqHYZTd",
     "name": "Luna \u2014 Late-Night Velvet",
     "description": "A warm soothing female late-night radio host, slightly husky and calm, with a slow relaxed velvety cadence and gentle warmth.",
-    "vibe": "Chill Lofi"
+    "vibe": "Chill Lofi",
+    "model": "eleven_v3",
+    "settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": true}
   },
   {
     "voice_id": "Gvq68LFb6sMUY4Frjqzn",
     "name": "Axl \u2014 Rock Gravel",
     "description": "A gritty classic-rock radio DJ, gravelly deep American male voice in his 40s, rugged, confident and commanding with rock-and-roll attitude.",
-    "vibe": "Rock / Metal"
+    "vibe": "Rock / Metal",
+    "model": "eleven_v3",
+    "settings": {"stability": 0.6, "similarity_boost": 0.7, "style": 0.3, "use_speaker_boost": true}
   },
   {
     "voice_id": "oY2xTzmanHYCTs8SiucR",
     "name": "Reaper \u2014 Metal Roar",
     "description": "An intense deep metal radio announcer, powerful and menacing low male voice, dramatic and gritty with dark commanding energy.",
-    "vibe": "Rock / Metal"
+    "vibe": "Rock / Metal",
+    "model": "eleven_v3",
+    "settings": {"stability": 1.0, "similarity_boost": 0.85, "style": 0.4, "use_speaker_boost": true}
   },
   {
     "voice_id": "kF2ieC6SVxxWPBvElzuh",
     "name": "Oliver \u2014 London Smooth",
     "description": "A charismatic British male radio presenter with a smooth London accent, witty and warm in a polished BBC broadcast style.",
-    "vibe": "Accents"
+    "vibe": "Accents",
+    "model": "eleven_multilingual_v2",
+    "settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.15, "use_speaker_boost": true}
   },
   {
     "voice_id": "k6zqzLWJ0yII6gu0peMn",
     "name": "Kai \u2014 Aussie Cool",
     "description": "A cool laid-back Australian male radio host with a friendly surfer vibe, easygoing yet energetic and charming.",
-    "vibe": "Accents"
+    "vibe": "Accents",
+    "model": "eleven_v3",
+    "settings": {"stability": 0.5, "similarity_boost": 0.85, "style": 0.7, "use_speaker_boost": true}
   }
 ]

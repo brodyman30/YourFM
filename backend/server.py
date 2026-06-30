@@ -38,27 +38,129 @@ ELEVEN_API_KEY = os.getenv('ELEVEN_API_KEY', '')
 eleven_client = ElevenLabs(api_key=ELEVEN_API_KEY) if ELEVEN_API_KEY else None
 
 # Curated UNIQUE designed ElevenLabs DJ voices (generated via Voice Design — not stock premade)
+#
+# Each voice carries its OWN tuned recipe: a TTS model + base voice_settings dialed in
+# for the most natural, least "AI" cadence. The turbo-family hype voices (Johnny, Jaxon)
+# support the `speed` parameter; the eleven_v3 voices ignore `speed` and rely on settings only.
+# NOTE: only edit `model`/`settings` here — these were hand-tuned against live previews.
 CURATED_DJ_VOICES = [
-    # Top 40 / high energy
-    {"voice_id": "SFLy8KPQaTeMd5DxmOmd", "name": "Jaxon — Top-40 Hype", "description": "High-energy American Top-40 morning host", "vibe": "Top 40"},
-    {"voice_id": "9c8VzCq2zlhwrVFJPt3U", "name": "Mia — Pop Energy", "description": "Bubbly, enthusiastic pop radio host", "vibe": "Top 40"},
+    # Top 40 / high energy (turbo engine — most natural cadence for hype delivery)
+    {
+        "voice_id": "0xDJFYYJsXzkI1tnTGpW", "name": "Johnny — Top-40 Hype",
+        "description": "Genuinely high-energy Top-40 hype host — upbeat, excited, still conversational",
+        "vibe": "Top 40",
+        "model": "eleven_turbo_v2_5",
+        "settings": {"stability": 0.75, "similarity_boost": 0.55, "style": 0.0, "use_speaker_boost": False, "speed": 0.96},
+    },
+    {
+        "voice_id": "jjPWyIS2ybPXJL6blCvY", "name": "Jaxon — Top-40 Energy",
+        "description": "Mid-30s energetic Top-40 host — upbeat and excited but conversational",
+        "vibe": "Top 40",
+        "model": "eleven_turbo_v2_5",
+        "settings": {"stability": 0.85, "similarity_boost": 0.45, "style": 0.0, "use_speaker_boost": False, "speed": 0.95},
+    },
+    {
+        "voice_id": "9c8VzCq2zlhwrVFJPt3U", "name": "Mia — Pop Energy",
+        "description": "Bubbly, enthusiastic pop radio host",
+        "vibe": "Top 40",
+        "model": "eleven_v3",
+        "settings": {"stability": 0.6, "similarity_boost": 0.7, "style": 0.3, "use_speaker_boost": True},
+    },
     # Chill / lofi
-    {"voice_id": "QRzSOQsyy2H3xOQE8rk5", "name": "Cole — Lofi Mellow", "description": "Soft-spoken, mellow late-night lo-fi host", "vibe": "Chill Lofi"},
-    {"voice_id": "sVPIwFSChJOLXAqHYZTd", "name": "Luna — Late-Night Velvet", "description": "Warm, husky, soothing late-night voice", "vibe": "Chill Lofi"},
+    {
+        "voice_id": "QRzSOQsyy2H3xOQE8rk5", "name": "Cole — Lofi Mellow",
+        "description": "Soft-spoken, mellow late-night lo-fi host",
+        "vibe": "Chill Lofi",
+        "model": "eleven_v3",
+        "settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": True},
+    },
+    {
+        "voice_id": "sVPIwFSChJOLXAqHYZTd", "name": "Luna — Late-Night Velvet",
+        "description": "Warm, husky, soothing late-night voice",
+        "vibe": "Chill Lofi",
+        "model": "eleven_v3",
+        "settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": True},
+    },
     # Classic rock / metal
-    {"voice_id": "Gvq68LFb6sMUY4Frjqzn", "name": "Axl — Rock Gravel", "description": "Gravelly, rugged classic-rock DJ", "vibe": "Rock / Metal"},
-    {"voice_id": "oY2xTzmanHYCTs8SiucR", "name": "Reaper — Metal Roar", "description": "Deep, menacing metal announcer", "vibe": "Rock / Metal"},
+    {
+        "voice_id": "Gvq68LFb6sMUY4Frjqzn", "name": "Axl — Rock Gravel",
+        "description": "Gravelly, rugged classic-rock DJ",
+        "vibe": "Rock / Metal",
+        "model": "eleven_v3",
+        "settings": {"stability": 0.6, "similarity_boost": 0.7, "style": 0.3, "use_speaker_boost": True},
+    },
+    {
+        "voice_id": "oY2xTzmanHYCTs8SiucR", "name": "Reaper — Metal Roar",
+        "description": "Deep, menacing metal announcer",
+        "vibe": "Rock / Metal",
+        "model": "eleven_v3",
+        "settings": {"stability": 1.0, "similarity_boost": 0.85, "style": 0.4, "use_speaker_boost": True},
+    },
     # Unique accents
-    {"voice_id": "kF2ieC6SVxxWPBvElzuh", "name": "Oliver — London Smooth", "description": "Witty, polished British presenter", "vibe": "Accents"},
-    {"voice_id": "k6zqzLWJ0yII6gu0peMn", "name": "Kai — Aussie Cool", "description": "Laid-back, friendly Australian host", "vibe": "Accents"},
+    {
+        "voice_id": "kF2ieC6SVxxWPBvElzuh", "name": "Oliver — London Smooth",
+        "description": "Witty, polished British presenter",
+        "vibe": "Accents",
+        "model": "eleven_multilingual_v2",
+        "settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.15, "use_speaker_boost": True},
+    },
+    {
+        "voice_id": "k6zqzLWJ0yII6gu0peMn", "name": "Kai — Aussie Cool",
+        "description": "Laid-back, friendly Australian host",
+        "vibe": "Accents",
+        "model": "eleven_v3",
+        "settings": {"stability": 0.5, "similarity_boost": 0.85, "style": 0.7, "use_speaker_boost": True},
+    },
 ]
 
-# Delivery style presets -> ElevenLabs VoiceSettings (stability snapped to v3-safe values)
-VOICE_STYLE_PRESETS = {
-    "energetic": {"stability": 0.5, "similarity_boost": 0.85, "style": 0.7, "use_speaker_boost": True},
-    "smooth":    {"stability": 0.5, "similarity_boost": 0.8,  "style": 0.3, "use_speaker_boost": True},
-    "announcer": {"stability": 1.0, "similarity_boost": 0.85, "style": 0.4, "use_speaker_boost": True},
+# Fast lookup by voice_id
+VOICE_BY_ID = {v["voice_id"]: v for v in CURATED_DJ_VOICES}
+
+# Fallback when a requested voice_id isn't in the curated roster
+DEFAULT_VOICE_RECIPE = {
+    "model": "eleven_v3",
+    "settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": True},
 }
+
+# Delivery style presets are now light NUDGES applied on top of a voice's own tuned recipe,
+# not absolute overrides. This preserves each voice's hand-dialed cadence while still letting
+# a segment lean more energetic, smoother, or announcer-like. Values are additive deltas
+# (clamped to safe ranges).
+VOICE_STYLE_PRESETS = {
+    "energetic": {"stability": -0.1,  "similarity_boost": 0.0, "style": +0.1},
+    "smooth":    {"stability": +0.05, "similarity_boost": 0.0, "style": -0.05},
+    "announcer": {"stability": +0.15, "similarity_boost": 0.0, "style": 0.0},
+}
+
+
+def build_voice_tts(voice_id: str, voice_style: str = None):
+    """Return (model_id, voice_settings_dict) for a given voice, starting from that voice's
+    own tuned recipe and applying an optional light style nudge on top.
+
+    Each curated voice keeps its own model + base settings (dialed against live previews).
+    A `voice_style` preset only nudges base values within safe ranges so the natural cadence
+    is preserved. The `speed` setting is only emitted for v2-family models (v3 ignores it).
+    """
+    recipe = VOICE_BY_ID.get(voice_id, DEFAULT_VOICE_RECIPE)
+    model = recipe.get("model", DEFAULT_VOICE_RECIPE["model"])
+    base = dict(recipe.get("settings", DEFAULT_VOICE_RECIPE["settings"]))
+
+    nudge = VOICE_STYLE_PRESETS.get(voice_style or "", {})
+    for key in ("stability", "similarity_boost", "style"):
+        if key in nudge and base.get(key) is not None:
+            base[key] = round(min(1.0, max(0.0, base[key] + nudge[key])), 3)
+
+    settings = {
+        "stability": base.get("stability"),
+        "similarity_boost": base.get("similarity_boost"),
+        "style": base.get("style"),
+        "use_speaker_boost": base.get("use_speaker_boost", True),
+    }
+    speed = base.get("speed")
+    if speed is not None and model in ("eleven_turbo_v2_5", "eleven_multilingual_v2", "eleven_turbo_v2"):
+        settings["speed"] = speed
+
+    return model, settings
 
 # Gemini Client
 EMERGENT_LLM_KEY = os.getenv('EMERGENT_LLM_KEY')
@@ -927,19 +1029,35 @@ async def generate_bumper(request: BumperRequest):
         # Build the system message with topic-specific instructions
         system_message = f"""You are a professional radio DJ speaking live on air. Output ONLY the exact spoken words - nothing else.
 
+The text you write will be read aloud by a text-to-speech voice. How you punctuate directly
+controls how natural it sounds, so follow the WRITING-FOR-VOICE rules exactly.
+
+WRITING-FOR-VOICE (these make the voice sound human, not robotic):
+- Write in full, flowing sentences that connect naturally - the way a real DJ actually talks.
+- NEVER use ellipses (...). They make the voice stop awkwardly after every word.
+- Use commas SPARINGLY. Too many commas make the voice rise in pitch on every word like a list.
+- At most ONE natural pause (a single comma or a period) per sentence.
+- VARY sentence length - mix a short punchy line with a longer flowing one. Do not make every sentence the same length.
+- End on a soft, natural close - a relaxed statement, NOT a clipped or listy ending.
+- Spell out tricky things phonetically when needed, but keep it conversational.
+- Contractions are good (you're, we've, that's) - they sound human.
+
 STRICT RULES:
-- Maximum 40 words (shorter is better)
+- Maximum 45 words (shorter is better)
 - NO asterisks, NO sound effects like *laughs* or (clears throat)
 - NO emojis, NO hashtags, NO URLs
 - NO meta-commentary like "Here's what I would say"
 - NO filler sounds like "um", "uh", "hmm", "haha"
 - Speak naturally as if talking to listeners RIGHT NOW
-- Mention the song and artist that just played
+- Mention the song and artist that JUST PLAYED (never pre-announce upcoming songs)
 - If REAL WEATHER is provided, mention it casually
 - If REAL CONCERT INFO is provided, mention it naturally
 - NEVER make up facts - only use info provided
 - End with "on your F M" or "here on your F M, your {genres_str} station"
 - Write "your F M" with a space for proper pronunciation
+
+GOOD EXAMPLE (notice the flow, minimal commas, no ellipses, varied length):
+"You are locked in to your F M where you belong. That last track from BAND was an absolute heater and we are keeping the music rolling all night long here on your F M."
 
 Current time: {time_context}
 Output the DJ's spoken words only - no quotes, no formatting."""
@@ -1040,20 +1158,18 @@ Output the DJ's spoken words only - no quotes, no formatting."""
         
         logging.info(f"Final bumper text: {bumper_text}")
         
-        # Generate voice audio using ElevenLabs (eleven_v3 = most lifelike, expressive)
+        # Generate voice audio using ElevenLabs.
+        # Each voice uses its OWN tuned model + settings (see build_voice_tts / CURATED_DJ_VOICES).
+        # An optional voice_style only nudges the voice's base recipe rather than overriding it.
         from elevenlabs import VoiceSettings
-        
-        preset = VOICE_STYLE_PRESETS.get(request.voice_style or "energetic", VOICE_STYLE_PRESETS["energetic"])
+
+        model_id, tts_settings = build_voice_tts(request.voice_id, request.voice_style)
+        logging.info(f"TTS voice={request.voice_id} model={model_id} settings={tts_settings}")
         audio_generator = eleven_client.text_to_speech.convert(
             text=bumper_text,
             voice_id=request.voice_id,
-            model_id="eleven_v3",
-            voice_settings=VoiceSettings(
-                stability=preset["stability"],
-                similarity_boost=preset["similarity_boost"],
-                style=preset["style"],
-                use_speaker_boost=preset["use_speaker_boost"]
-            )
+            model_id=model_id,
+            voice_settings=VoiceSettings(**tts_settings)
         )
         
         # Collect audio data
