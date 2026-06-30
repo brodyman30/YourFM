@@ -55,6 +55,13 @@ Landing ("Start Listening") → My Stations → Create Station (name + Feed.fm s
   'concert tours' bumper topic. Weather appears in ~25% of bumpers by design.
 - Landing page recopy ("licensed radio, no account needed").
 
+## Voice quality (2026-06, iteration_12 verified)
+- TTS model upgraded eleven_turbo_v2_5 -> eleven_multilingual_v2 (richer, more natural).
+- Voice picker now shows a curated 12 premade ElevenLabs DJ voices grouped by vibe
+  (Top 40, Chill Lofi, Rock / Metal, Accents) via CURATED_DJ_VOICES; cloned/pro voices removed.
+- New "DJ Delivery Style" presets energetic/smooth/announcer (VOICE_STYLE_PRESETS -> VoiceSettings),
+  saved on the station (voice_style) and sent to /api/bumpers/generate.
+
 ## Known minor items (from code review, not blocking)
 - Reactive visualizer now sits BEHIND the album art on the now-playing screen (canvas 520x300,
   z-index 1 vs art z-index 10), driven by the Web Audio AnalyserNode (crossOrigin audio +
