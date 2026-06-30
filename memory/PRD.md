@@ -56,7 +56,11 @@ Landing ("Start Listening") → My Stations → Create Station (name + Feed.fm s
 - Landing page recopy ("licensed radio, no account needed").
 
 ## Known minor items (from code review, not blocking)
-- fadeVolume setInterval not cleared on unmount (Player stays mounted so low risk).
+- Reactive visualizer now sits BEHIND the album art on the now-playing screen (canvas 520x300,
+  z-index 1 vs art z-index 10), driven by the Web Audio AnalyserNode (crossOrigin audio +
+  Feed.fm CDN CORS). Visualizer useEffect uses [loading] deps so it mounts after the spinner.
+- audioCtxRef is never closed on unmount (Player stays mounted; low risk).
+- fadeVolume setInterval not cleared on unmount.
 - Voice <select> placeholder allows submit before ElevenLabs voices load (~1-2s) -> validation toast.
 - StationCreate.feedfm_station_id is Optional but product-required (add server validation).
 
