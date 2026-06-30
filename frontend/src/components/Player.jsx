@@ -73,8 +73,8 @@ const Player = ({ station, clientId, active = true }) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    canvas.width = 600;
-    canvas.height = 120;
+    canvas.width = 520;
+    canvas.height = 300;
     let t = 0;
     let smooth = 0;
     const animate = () => {
@@ -91,17 +91,20 @@ const Player = ({ station, clientId, active = true }) => {
       smooth += (energy - smooth) * 0.2;        // smooth the reaction
       t += 0.012 + smooth * 0.08;               // tempo reacts to loudness
       const cy = canvas.height / 2;
-      const boost = 0.35 + smooth * 2.4;        // amplitude reacts to loudness
+      const boost = 0.6 + smooth * 2.6;         // amplitude reacts to loudness
       const layers = [
-        { c: 'rgba(139,92,246,0.25)', a: 28, f: 0.02, p: 0, w: 8 },
-        { c: 'rgba(251,191,36,0.5)', a: 22, f: 0.03, p: 1, w: 4 },
-        { c: 'rgba(251,191,36,0.85)', a: 14, f: 0.035, p: 1.5, w: 2 }
+        { c: 'rgba(139,92,246,0.30)', a: 46, f: 0.018, p: 0, w: 10 },
+        { c: 'rgba(167,139,250,0.45)', a: 38, f: 0.024, p: 0.6, w: 7 },
+        { c: 'rgba(251,191,36,0.55)', a: 30, f: 0.03, p: 1, w: 5 },
+        { c: 'rgba(251,191,36,0.9)', a: 20, f: 0.036, p: 1.5, w: 3 }
       ];
       layers.forEach((L) => {
         ctx.beginPath();
         ctx.strokeStyle = L.c;
         ctx.lineWidth = L.w;
         ctx.lineCap = 'round';
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = L.c;
         for (let x = 0; x <= canvas.width; x += 3) {
           const amp = L.a * boost;
           const y = cy + Math.sin(x * L.f + t + L.p) * amp + Math.sin(x * L.f * 1.5 - t * 0.8) * (amp * 0.4);
@@ -109,6 +112,7 @@ const Player = ({ station, clientId, active = true }) => {
         }
         ctx.stroke();
       });
+      ctx.shadowBlur = 0;
       animRef.current = requestAnimationFrame(animate);
     };
     animate();
@@ -332,13 +336,25 @@ const Player = ({ station, clientId, active = true }) => {
         </div>
 
         <div style={{
-          width: '260px', height: '260px', margin: '0 auto 1.5rem',
-          borderRadius: '20px', overflow: 'hidden',
-          background: albumArt ? `url(${albumArt}) center/cover` : 'linear-gradient(135deg, #8B5CF6, #FBBF24)',
-          boxShadow: '0 0 60px rgba(251,191,36,0.25)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }} data-testid="album-art">
-          {!albumArt && <span style={{ fontSize: '4rem' }}>🎵</span>}
+          position: 'relative', width: '100%', maxWidth: '520px', height: '300px',
+          margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          {/* Reactive visualizer behind the album art (like the home screen) */}
+          <canvas
+            ref={canvasRef}
+            data-testid="visualizer-canvas"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }}
+          />
+          <div style={{
+            position: 'relative', zIndex: 10,
+            width: '240px', height: '240px',
+            borderRadius: '20px', overflow: 'hidden',
+            background: albumArt ? `url(${albumArt}) center/cover` : 'linear-gradient(135deg, #8B5CF6, #FBBF24)',
+            boxShadow: '0 0 60px rgba(251,191,36,0.35)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }} data-testid="album-art">
+            {!albumArt && <span style={{ fontSize: '4rem' }}>🎵</span>}
+          </div>
         </div>
 
         {playingBumper && (
@@ -354,8 +370,6 @@ const Player = ({ station, clientId, active = true }) => {
         <h2 style={{ color: '#FBBF24', fontSize: '1.8rem', margin: '0 0 0.4rem' }} data-testid="track-title">{title}</h2>
         <p style={{ color: '#e5e7eb', fontSize: '1.1rem', margin: '0 0 0.2rem' }} data-testid="track-artist">{artistName}</p>
         {albumName && <p style={{ color: '#9ca3af', fontSize: '0.9rem', margin: 0 }}>{albumName}</p>}
-
-        <canvas ref={canvasRef} style={{ width: '100%', height: '120px', margin: '1.5rem 0' }} />
 
         {/* Controls */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.5rem' }}>
