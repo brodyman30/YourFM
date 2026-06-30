@@ -22,7 +22,8 @@ const StationCreator = ({ station, feedStations = [], onStationCreated, onCancel
     feedfm_station_name: station?.feedfm_station_name || '',
     bumper_topics: station?.bumper_topics || [],
     voice_id: station?.voice_id || '',
-    voice_name: station?.voice_name || ''
+    voice_name: station?.voice_name || '',
+    voice_style: station?.voice_style || 'energetic'
   });
 
   const [voices, setVoices] = useState([]);
@@ -69,7 +70,8 @@ const StationCreator = ({ station, feedStations = [], onStationCreated, onCancel
       artists: [],
       bumper_topics: formData.bumper_topics,
       voice_id: formData.voice_id,
-      voice_name: formData.voice_name
+      voice_name: formData.voice_name,
+      voice_style: formData.voice_style
     };
     try {
       setLoading(true);
@@ -149,7 +151,7 @@ const StationCreator = ({ station, feedStations = [], onStationCreated, onCancel
 
         {/* Voice */}
         <div className="form-group">
-          <label className="form-label">Voice *</label>
+          <label className="form-label">DJ Voice *</label>
           <select
             data-testid="voice-select"
             className="form-input"
@@ -159,10 +161,42 @@ const StationCreator = ({ station, feedStations = [], onStationCreated, onCancel
               setFormData({ ...formData, voice_id: e.target.value, voice_name: voice ? voice.name : '' });
             }}
           >
-            <option value="">Select a voice</option>
-            {voices.map(voice => (
+            <option value="">Select a DJ voice</option>
+            {['Top 40', 'Chill Lofi', 'Rock / Metal', 'Accents'].map((group) => {
+              const groupVoices = voices.filter(v => v.vibe === group);
+              if (!groupVoices.length) return null;
+              return (
+                <optgroup key={group} label={group}>
+                  {groupVoices.map(voice => (
+                    <option key={voice.voice_id} value={voice.voice_id}>{voice.name}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
+            {/* Fallback for any voices without a vibe group */}
+            {voices.filter(v => !v.vibe).map(voice => (
               <option key={voice.voice_id} value={voice.voice_id}>{voice.name}</option>
             ))}
+          </select>
+          {formData.voice_id && (
+            <p style={{ color: '#9ca3af', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+              {voices.find(v => v.voice_id === formData.voice_id)?.description}
+            </p>
+          )}
+        </div>
+
+        {/* DJ delivery style */}
+        <div className="form-group">
+          <label className="form-label">DJ Delivery Style</label>
+          <select
+            data-testid="voice-style-select"
+            className="form-input"
+            value={formData.voice_style}
+            onChange={(e) => setFormData({ ...formData, voice_style: e.target.value })}
+          >
+            <option value="energetic">Energetic DJ — punchy, hyped</option>
+            <option value="smooth">Smooth late-night — relaxed, warm</option>
+            <option value="announcer">Neutral announcer — clear, steady</option>
           </select>
         </div>
 

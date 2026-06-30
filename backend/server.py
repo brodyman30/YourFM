@@ -37,6 +37,33 @@ SPOTIFY_SCOPE = 'streaming user-read-email user-read-private user-modify-playbac
 ELEVEN_API_KEY = os.getenv('ELEVEN_API_KEY', '')
 eleven_client = ElevenLabs(api_key=ELEVEN_API_KEY) if ELEVEN_API_KEY else None
 
+# Curated premade ElevenLabs DJ voices, grouped by station vibe
+CURATED_DJ_VOICES = [
+    # Top 40 / high energy
+    {"voice_id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam — Top-40 Hype", "description": "Energetic young American host", "vibe": "Top 40"},
+    {"voice_id": "IKne3meq5aSn9XLyUdCD", "name": "Charlie — Aussie Energy", "description": "Deep, confident, hyped (Australian accent)", "vibe": "Top 40"},
+    {"voice_id": "FGY2WhTYpPnrIDTdsKH5", "name": "Laura — Pop Sass", "description": "Enthusiastic, quirky young female", "vibe": "Top 40"},
+    # Chill / lofi
+    {"voice_id": "bIHbv24MWmeRgasZH58o", "name": "Will — Lofi Chill", "description": "Relaxed, easygoing optimist", "vibe": "Chill Lofi"},
+    {"voice_id": "SAz9YHcvj6GT2YYXdXww", "name": "River — Mellow", "description": "Relaxed, neutral, calm", "vibe": "Chill Lofi"},
+    {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah — Smooth Evening", "description": "Mature, reassuring, confident female", "vibe": "Chill Lofi"},
+    # Classic rock / metal
+    {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam — Rock Announcer", "description": "Dominant, firm, commanding", "vibe": "Rock / Metal"},
+    {"voice_id": "nPczCjzI2devNBz1zQrb", "name": "Brian — Deep & Resonant", "description": "Deep, resonant, comforting", "vibe": "Rock / Metal"},
+    {"voice_id": "N2lVS1w4EtoT3dr4eOWO", "name": "Callum — Gritty Husky", "description": "Husky, rough-edged character", "vibe": "Rock / Metal"},
+    # Unique accents
+    {"voice_id": "JBFqnCBsd6RMkjVDRZzb", "name": "George — British Storyteller", "description": "Warm, captivating (British accent)", "vibe": "Accents"},
+    {"voice_id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel — British Broadcaster", "description": "Steady, formal news voice (British accent)", "vibe": "Accents"},
+    {"voice_id": "pFZP5JQG7iQjIQuC4Bku", "name": "Lily — British Velvet", "description": "Velvety, confident female (British accent)", "vibe": "Accents"},
+]
+
+# Delivery style presets -> ElevenLabs VoiceSettings
+VOICE_STYLE_PRESETS = {
+    "energetic": {"stability": 0.35, "similarity_boost": 0.85, "style": 0.7, "use_speaker_boost": True},
+    "smooth":    {"stability": 0.6,  "similarity_boost": 0.8,  "style": 0.3, "use_speaker_boost": True},
+    "announcer": {"stability": 0.5,  "similarity_boost": 0.85, "style": 0.45, "use_speaker_boost": True},
+}
+
 # Gemini Client
 EMERGENT_LLM_KEY = os.getenv('EMERGENT_LLM_KEY')
 
@@ -264,6 +291,7 @@ class Station(BaseModel):
     bumper_topics: List[str] = []
     voice_id: str
     voice_name: str
+    voice_style: Optional[str] = "energetic"
     user_id: str = "default_user"  # For demo purposes
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     # Feed.fm licensed-radio station mapping
@@ -279,6 +307,7 @@ class StationCreate(BaseModel):
     bumper_topics: List[str] = []
     voice_id: str
     voice_name: str
+    voice_style: Optional[str] = "energetic"
     feedfm_station_id: Optional[str] = None
     feedfm_station_name: Optional[str] = None
 
@@ -297,6 +326,7 @@ class BumperRequest(BaseModel):
     genres: List[str]  # Changed to list
     artists: List[Artist]
     voice_id: str
+    voice_style: Optional[str] = "energetic"  # energetic | smooth | announcer
     current_track_name: Optional[str] = None
     current_track_artist: Optional[str] = None
     next_track_name: Optional[str] = None
@@ -817,41 +847,8 @@ async def test_concert_bumper(artist: str = "Bad Omens", lat: float = 34.0522, l
 # ElevenLabs Voice Routes
 @api_router.get("/elevenlabs/voices")
 async def get_voices():
-    """Get user's custom voices from ElevenLabs"""
-    if not eleven_client:
-        raise HTTPException(status_code=500, detail="ElevenLabs API key not configured")
-    
-    try:
-        voices_response = eleven_client.voices.get_all()
-        
-        voices = []
-        for voice in voices_response.voices:
-            # Get all voices - user's custom voices and premade ones
-            # Filter to only show voices owned by the user (category = 'cloned' or 'generated')
-            voice_category = getattr(voice, 'category', None)
-            
-            # Only include user's custom voices, not premade library voices
-            if voice_category in ['cloned', 'generated', 'professional']:
-                voices.append({
-                    "voice_id": voice.voice_id,
-                    "name": voice.name,
-                    "description": getattr(voice, 'description', None),
-                    "category": voice_category
-                })
-        
-        # If no custom voices, include a helpful message
-        if len(voices) == 0:
-            logging.warning("No custom voices found for this API key")
-            # Return empty list - user needs to create voices in ElevenLabs
-            return {
-                "voices": [],
-                "message": "No custom voices found. Please create voices in your ElevenLabs account at elevenlabs.io"
-            }
-        
-        return {"voices": voices}
-    except Exception as e:
-        logging.error(f"Error fetching voices: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching voices: {str(e)}")
+    """Return the curated set of premade ElevenLabs DJ voices, grouped by vibe."""
+    return {"voices": CURATED_DJ_VOICES}
 
 # Bumper Generation Routes
 @api_router.post("/bumpers/generate")
@@ -1047,18 +1044,19 @@ Output the DJ's spoken words only - no quotes, no formatting."""
         
         logging.info(f"Final bumper text: {bumper_text}")
         
-        # Generate voice audio using ElevenLabs with stability settings for radio quality
+        # Generate voice audio using ElevenLabs (multilingual_v2 = richer, more natural delivery)
         from elevenlabs import VoiceSettings
         
+        preset = VOICE_STYLE_PRESETS.get(request.voice_style or "energetic", VOICE_STYLE_PRESETS["energetic"])
         audio_generator = eleven_client.text_to_speech.convert(
             text=bumper_text,
             voice_id=request.voice_id,
-            model_id="eleven_turbo_v2_5",  # Use turbo for faster, more energetic delivery
+            model_id="eleven_multilingual_v2",
             voice_settings=VoiceSettings(
-                stability=0.4,  # Lower for more expressive, radio-style delivery
-                similarity_boost=0.8,  # Higher for consistent voice quality
-                style=0.6,  # Add more character
-                use_speaker_boost=True  # Enhance clarity
+                stability=preset["stability"],
+                similarity_boost=preset["similarity_boost"],
+                style=preset["style"],
+                use_speaker_boost=preset["use_speaker_boost"]
             )
         )
         

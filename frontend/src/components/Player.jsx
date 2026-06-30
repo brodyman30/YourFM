@@ -247,6 +247,7 @@ const Player = ({ station, clientId, active = true }) => {
         genres: station.genres && station.genres.length ? station.genres : (station.feedfm_station_name ? [station.feedfm_station_name] : []),
         artists: [],
         voice_id: station.voice_id,
+        voice_style: station.voice_style || 'energetic',
         current_track_name: af.track?.title || '',
         current_track_artist: af.artist?.name || '',
         user_location: userLocationRef.current || undefined
