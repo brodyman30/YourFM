@@ -37,31 +37,27 @@ SPOTIFY_SCOPE = 'streaming user-read-email user-read-private user-modify-playbac
 ELEVEN_API_KEY = os.getenv('ELEVEN_API_KEY', '')
 eleven_client = ElevenLabs(api_key=ELEVEN_API_KEY) if ELEVEN_API_KEY else None
 
-# Curated premade ElevenLabs DJ voices, grouped by station vibe
+# Curated UNIQUE designed ElevenLabs DJ voices (generated via Voice Design — not stock premade)
 CURATED_DJ_VOICES = [
     # Top 40 / high energy
-    {"voice_id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam — Top-40 Hype", "description": "Energetic young American host", "vibe": "Top 40"},
-    {"voice_id": "IKne3meq5aSn9XLyUdCD", "name": "Charlie — Aussie Energy", "description": "Deep, confident, hyped (Australian accent)", "vibe": "Top 40"},
-    {"voice_id": "FGY2WhTYpPnrIDTdsKH5", "name": "Laura — Pop Sass", "description": "Enthusiastic, quirky young female", "vibe": "Top 40"},
+    {"voice_id": "SFLy8KPQaTeMd5DxmOmd", "name": "Jaxon — Top-40 Hype", "description": "High-energy American Top-40 morning host", "vibe": "Top 40"},
+    {"voice_id": "9c8VzCq2zlhwrVFJPt3U", "name": "Mia — Pop Energy", "description": "Bubbly, enthusiastic pop radio host", "vibe": "Top 40"},
     # Chill / lofi
-    {"voice_id": "bIHbv24MWmeRgasZH58o", "name": "Will — Lofi Chill", "description": "Relaxed, easygoing optimist", "vibe": "Chill Lofi"},
-    {"voice_id": "SAz9YHcvj6GT2YYXdXww", "name": "River — Mellow", "description": "Relaxed, neutral, calm", "vibe": "Chill Lofi"},
-    {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah — Smooth Evening", "description": "Mature, reassuring, confident female", "vibe": "Chill Lofi"},
+    {"voice_id": "QRzSOQsyy2H3xOQE8rk5", "name": "Cole — Lofi Mellow", "description": "Soft-spoken, mellow late-night lo-fi host", "vibe": "Chill Lofi"},
+    {"voice_id": "sVPIwFSChJOLXAqHYZTd", "name": "Luna — Late-Night Velvet", "description": "Warm, husky, soothing late-night voice", "vibe": "Chill Lofi"},
     # Classic rock / metal
-    {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam — Rock Announcer", "description": "Dominant, firm, commanding", "vibe": "Rock / Metal"},
-    {"voice_id": "nPczCjzI2devNBz1zQrb", "name": "Brian — Deep & Resonant", "description": "Deep, resonant, comforting", "vibe": "Rock / Metal"},
-    {"voice_id": "N2lVS1w4EtoT3dr4eOWO", "name": "Callum — Gritty Husky", "description": "Husky, rough-edged character", "vibe": "Rock / Metal"},
+    {"voice_id": "Gvq68LFb6sMUY4Frjqzn", "name": "Axl — Rock Gravel", "description": "Gravelly, rugged classic-rock DJ", "vibe": "Rock / Metal"},
+    {"voice_id": "oY2xTzmanHYCTs8SiucR", "name": "Reaper — Metal Roar", "description": "Deep, menacing metal announcer", "vibe": "Rock / Metal"},
     # Unique accents
-    {"voice_id": "JBFqnCBsd6RMkjVDRZzb", "name": "George — British Storyteller", "description": "Warm, captivating (British accent)", "vibe": "Accents"},
-    {"voice_id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel — British Broadcaster", "description": "Steady, formal news voice (British accent)", "vibe": "Accents"},
-    {"voice_id": "pFZP5JQG7iQjIQuC4Bku", "name": "Lily — British Velvet", "description": "Velvety, confident female (British accent)", "vibe": "Accents"},
+    {"voice_id": "kF2ieC6SVxxWPBvElzuh", "name": "Oliver — London Smooth", "description": "Witty, polished British presenter", "vibe": "Accents"},
+    {"voice_id": "k6zqzLWJ0yII6gu0peMn", "name": "Kai — Aussie Cool", "description": "Laid-back, friendly Australian host", "vibe": "Accents"},
 ]
 
-# Delivery style presets -> ElevenLabs VoiceSettings
+# Delivery style presets -> ElevenLabs VoiceSettings (stability snapped to v3-safe values)
 VOICE_STYLE_PRESETS = {
-    "energetic": {"stability": 0.35, "similarity_boost": 0.85, "style": 0.7, "use_speaker_boost": True},
-    "smooth":    {"stability": 0.6,  "similarity_boost": 0.8,  "style": 0.3, "use_speaker_boost": True},
-    "announcer": {"stability": 0.5,  "similarity_boost": 0.85, "style": 0.45, "use_speaker_boost": True},
+    "energetic": {"stability": 0.5, "similarity_boost": 0.85, "style": 0.7, "use_speaker_boost": True},
+    "smooth":    {"stability": 0.5, "similarity_boost": 0.8,  "style": 0.3, "use_speaker_boost": True},
+    "announcer": {"stability": 1.0, "similarity_boost": 0.85, "style": 0.4, "use_speaker_boost": True},
 }
 
 # Gemini Client
@@ -1044,14 +1040,14 @@ Output the DJ's spoken words only - no quotes, no formatting."""
         
         logging.info(f"Final bumper text: {bumper_text}")
         
-        # Generate voice audio using ElevenLabs (multilingual_v2 = richer, more natural delivery)
+        # Generate voice audio using ElevenLabs (eleven_v3 = most lifelike, expressive)
         from elevenlabs import VoiceSettings
         
         preset = VOICE_STYLE_PRESETS.get(request.voice_style or "energetic", VOICE_STYLE_PRESETS["energetic"])
         audio_generator = eleven_client.text_to_speech.convert(
             text=bumper_text,
             voice_id=request.voice_id,
-            model_id="eleven_multilingual_v2",
+            model_id="eleven_v3",
             voice_settings=VoiceSettings(
                 stability=preset["stability"],
                 similarity_boost=preset["similarity_boost"],
