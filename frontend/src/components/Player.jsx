@@ -117,7 +117,7 @@ const Player = ({ station, clientId, active = true }) => {
     };
     animate();
     return () => animRef.current && cancelAnimationFrame(animRef.current);
-  }, []);
+  }, [loading]);
 
   const resetAndLoad = async () => {
     setLoading(true);
