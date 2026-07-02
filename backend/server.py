@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import base64
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from google import genai as google_genai
+from google.genai import types as genai_types
 from elevenlabs import ElevenLabs
 import io
 import aiohttp
@@ -36,6 +37,32 @@ SPOTIFY_SCOPE = 'streaming user-read-email user-read-private user-modify-playbac
 # ElevenLabs Client
 ELEVEN_API_KEY = os.getenv('ELEVEN_API_KEY', '')
 eleven_client = ElevenLabs(api_key=ELEVEN_API_KEY) if ELEVEN_API_KEY else None
+# When ELEVEN_USE_REST=1, call the ElevenLabs REST endpoint directly via httpx instead of
+# the SDK. Used when the key is injected by an outbound auth proxy (which sets xi-api-key)
+# rather than present in the process env.
+ELEVEN_USE_REST = os.getenv('ELEVEN_USE_REST') == '1'
+ELEVEN_REST_BASE = os.getenv('ELEVEN_REST_BASE', 'https://api.elevenlabs.io')
+
+# In the sandbox, outbound calls go through an auth proxy whose CA the Python SSL stack
+# rejects ("Missing Authority Key Identifier"). PROXY_INSECURE_TLS=1 relaxes verification
+# for that proxy hop only. Never enable this in production (keys should be in the env there).
+PROXY_INSECURE_TLS = os.getenv('PROXY_INSECURE_TLS') == '1'
+_HTTPX_VERIFY = not PROXY_INSECURE_TLS
+
+
+async def eleven_tts_rest(text: str, voice_id: str, model_id: str, settings: dict) -> bytes:
+    """Fetch TTS audio (mp3 bytes) from the ElevenLabs REST API via httpx so an outbound
+    auth proxy can inject the xi-api-key header."""
+    import httpx
+    url = f"{ELEVEN_REST_BASE}/v1/text-to-speech/{voice_id}"
+    headers = {"Content-Type": "application/json", "Accept": "audio/mpeg"}
+    if ELEVEN_API_KEY:
+        headers["xi-api-key"] = ELEVEN_API_KEY
+    payload = {"text": text, "model_id": model_id, "voice_settings": settings}
+    async with httpx.AsyncClient(timeout=90, verify=_HTTPX_VERIFY) as client:
+        r = await client.post(url, headers=headers, json=payload)
+        r.raise_for_status()
+        return r.content
 
 # Curated UNIQUE designed ElevenLabs DJ voices (generated via Voice Design — not stock premade)
 #
@@ -162,8 +189,47 @@ def build_voice_tts(voice_id: str, voice_style: str = None):
 
     return model, settings
 
-# Gemini Client
-EMERGENT_LLM_KEY = os.getenv('EMERGENT_LLM_KEY')
+# Gemini Client (standard Google google-genai SDK)
+# Accepts GEMINI_API_KEY (preferred) or legacy EMERGENT_LLM_KEY for back-compat.
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') or os.getenv('EMERGENT_LLM_KEY')
+gemini_client = google_genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
+
+# When GEMINI_USE_REST=1, call the Gemini REST endpoint directly via httpx instead of the
+# SDK. Used when the API key is supplied by an outbound auth proxy (which injects the
+# x-goog-api-key header) rather than being present in the process env.
+GEMINI_USE_REST = os.getenv('GEMINI_USE_REST') == '1'
+GEMINI_REST_BASE = os.getenv('GEMINI_REST_BASE', 'https://generativelanguage.googleapis.com')
+
+
+async def gemini_generate(system_message: str, prompt: str) -> str:
+    """Generate text from Gemini. Uses the google-genai SDK when an API key is present in
+    the env; otherwise (proxy mode) issues a direct REST call via httpx so an outbound auth
+    proxy can inject the key. Returns the response text."""
+    if GEMINI_USE_REST or not gemini_client:
+        import httpx
+        url = f"{GEMINI_REST_BASE}/v1beta/models/{GEMINI_MODEL}:generateContent"
+        headers = {"Content-Type": "application/json"}
+        if GEMINI_API_KEY:
+            headers["x-goog-api-key"] = GEMINI_API_KEY
+        payload = {
+            "system_instruction": {"parts": [{"text": system_message}]},
+            "contents": [{"parts": [{"text": prompt}]}],
+        }
+        async with httpx.AsyncClient(timeout=30, verify=_HTTPX_VERIFY) as client:
+            r = await client.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            data = r.json()
+        try:
+            return (data["candidates"][0]["content"]["parts"][0]["text"] or "").strip()
+        except (KeyError, IndexError):
+            return ""
+    gen_response = await gemini_client.aio.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(system_instruction=system_message),
+    )
+    return (gen_response.text or "").strip()
 
 # SeatGeek API (for concert data)
 SEATGEEK_CLIENT_ID = os.getenv('SEATGEEK_CLIENT_ID', '')
@@ -952,10 +1018,10 @@ async def get_voices():
 @api_router.post("/bumpers/generate")
 async def generate_bumper(request: BumperRequest):
     """Generate a professional radio bumper with AI-generated text, voice, and background music"""
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API key not configured")
+    if not gemini_client and not GEMINI_USE_REST:
+        raise HTTPException(status_code=500, detail="Gemini API key not configured (set GEMINI_API_KEY)")
     
-    if not eleven_client:
+    if not eleven_client and not ELEVEN_USE_REST:
         raise HTTPException(status_code=500, detail="ElevenLabs API key not configured")
     
     try:
@@ -1062,11 +1128,7 @@ GOOD EXAMPLE (notice the flow, minimal commas, no ellipses, varied length):
 Current time: {time_context}
 Output the DJ's spoken words only - no quotes, no formatting."""
 
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=str(uuid.uuid4()),
-            system_message=system_message
-        ).with_model("gemini", "gemini-2.5-flash")
+        # (system_message is built above; we pass it via the generation config)
         
         # Build specific prompt with actual track info and real-time context
         topics_str = ", ".join(request.topics) if request.topics else ""
@@ -1093,8 +1155,7 @@ Output the DJ's spoken words only - no quotes, no formatting."""
         
         logging.info(f"Prompt sent to AI: {prompt}")
         
-        message = UserMessage(text=prompt)
-        raw_response = await chat.send_message(message)
+        raw_response = await gemini_generate(system_message, prompt)
         
         logging.info(f"AI response: {raw_response}")
         
@@ -1165,17 +1226,19 @@ Output the DJ's spoken words only - no quotes, no formatting."""
 
         model_id, tts_settings = build_voice_tts(request.voice_id, request.voice_style)
         logging.info(f"TTS voice={request.voice_id} model={model_id} settings={tts_settings}")
-        audio_generator = eleven_client.text_to_speech.convert(
-            text=bumper_text,
-            voice_id=request.voice_id,
-            model_id=model_id,
-            voice_settings=VoiceSettings(**tts_settings)
-        )
-        
-        # Collect audio data
-        audio_data = b""
-        for chunk in audio_generator:
-            audio_data += chunk
+        if ELEVEN_USE_REST or not eleven_client:
+            audio_data = await eleven_tts_rest(bumper_text, request.voice_id, model_id, tts_settings)
+        else:
+            audio_generator = eleven_client.text_to_speech.convert(
+                text=bumper_text,
+                voice_id=request.voice_id,
+                model_id=model_id,
+                voice_settings=VoiceSettings(**tts_settings)
+            )
+            # Collect audio data
+            audio_data = b""
+            for chunk in audio_generator:
+                audio_data += chunk
         
         # Convert to base64 for voice-only bumper (music generation disabled)
         audio_b64 = base64.b64encode(audio_data).decode()
